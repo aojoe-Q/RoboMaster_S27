@@ -22,7 +22,7 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+#include "Arm_USB_task.h"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -95,7 +95,6 @@ uint8_t UserRxBufferHS[APP_RX_DATA_SIZE];
 uint8_t UserTxBufferHS[APP_TX_DATA_SIZE];
 
 /* USER CODE BEGIN PRIVATE_VARIABLES */
-
 /* USER CODE END PRIVATE_VARIABLES */
 
 /**
@@ -154,6 +153,9 @@ USBD_CDC_ItfTypeDef USBD_Interface_fops_HS =
 static int8_t CDC_Init_HS(void)
 {
   /* USER CODE BEGIN 8 */
+  /* New CDC session (SET_CONFIGURATION): runs before any OUT data. */
+  Arm_USB_OnSessionStart();
+
   /* Set Application Buffers */
   USBD_CDC_SetTxBuffer(&hUsbDeviceHS, UserTxBufferHS, 0);
   USBD_CDC_SetRxBuffer(&hUsbDeviceHS, UserRxBufferHS);
@@ -169,6 +171,8 @@ static int8_t CDC_Init_HS(void)
 static int8_t CDC_DeInit_HS(void)
 {
   /* USER CODE BEGIN 9 */
+  /* USB reset / disconnect / reconfigure: the session is over. */
+  Arm_USB_OnSessionEnd();
   return (USBD_OK);
   /* USER CODE END 9 */
 }
@@ -264,7 +268,14 @@ static int8_t CDC_Control_HS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_HS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 11 */
-  USBD_CDC_SetRxBuffer(&hUsbDeviceHS, &Buf[0]);
+  /* Only copy into the RX ring; Arm_USB_Task parses it. */
+  if ((Len != NULL) && (*Len > 0U))
+  {
+    Arm_USB_RxPush(Buf, *Len);
+  }
+
+  /* Re-arm the OUT endpoint for the next transfer. */
+  USBD_CDC_SetRxBuffer(&hUsbDeviceHS, UserRxBufferHS);
   USBD_CDC_ReceivePacket(&hUsbDeviceHS);
   return (USBD_OK);
   /* USER CODE END 11 */
@@ -281,12 +292,26 @@ uint8_t CDC_Transmit_HS(uint8_t* Buf, uint16_t Len)
 {
   uint8_t result = USBD_OK;
   /* USER CODE BEGIN 12 */
+  /* A USB reset/disconnect interrupt can clear pClassData between a check
+     and its use, so check and submit with the OTG_HS interrupt masked.
+     This only queues the transfer; completion is reported by interrupt. */
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceHS.pClassData;
-  if (hcdc->TxState != 0){
-    return USBD_BUSY;
+  if ((hUsbDeviceHS.dev_state != USBD_STATE_CONFIGURED) || (hcdc == NULL))
+  {
+    result = USBD_FAIL;
   }
-  USBD_CDC_SetTxBuffer(&hUsbDeviceHS, Buf, Len);
-  result = USBD_CDC_TransmitPacket(&hUsbDeviceHS);
+  else if (hcdc->TxState != 0U)
+  {
+    result = USBD_BUSY;
+  }
+  else
+  {
+    USBD_CDC_SetTxBuffer(&hUsbDeviceHS, Buf, Len);
+    result = USBD_CDC_TransmitPacket(&hUsbDeviceHS);
+  }
+  __set_PRIMASK(primask);
   /* USER CODE END 12 */
   return result;
 }

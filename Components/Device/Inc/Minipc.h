@@ -22,7 +22,14 @@
 #include "stdbool.h" 
 
 
-extern void MiniPC_Transmit_Info(uint8_t *Buff);
+#define MINIPC_TX_OK    0U      /* same value as USBD_OK */
 
-extern void MiniPC_Recvive_Info(uint8_t* Buff, const uint32_t *Len);
+/* Returns USBD_OK, USBD_BUSY or USBD_FAIL. */
+uint8_t MiniPC_Transmit_Info(const uint8_t *buf, uint16_t len);
+
+/* USB enumerated and the CDC class is up. */
+bool MiniPC_Is_Connected(void);
+
+/* A previous transmit is still in flight. */
+bool MiniPC_Tx_Busy(void);
 #endif

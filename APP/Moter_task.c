@@ -34,11 +34,12 @@ void Moter_Task(void const * argument)
 		osDelay(2);
 		mit_ctrl(&hfdcan1, 0x06, ArmData.J6.send_set, 0, ArmData.J6.Kp, ArmData.J6.Kd, 0);
 		osDelay(2);
-		if(switch_is_up(DT7_RIGHT_SW)&&switch_is_mid(DT7_LEFT_SW))
-			mit_ctrl(&hfdcan1, 0x07, 0, 0, 0, 0, 0.2);
+		if(switch_is_up(DT7_RIGHT_SW)&&switch_is_mid(DT7_LEFT_SW))  
+			mit_ctrl(&hfdcan1, 0x07, 0, 0, 0, 0, 0.2);  //Á¦¾Ø¿ØÖÆ¼Ð×¦¼ÐÈ¡
 		else
 		{
-			mit_ctrl(&hfdcan1, 0x07, ArmData.Grip.send_set, 0, ArmData.Grip.Kp, ArmData.Grip.Kd, 0);
+			
+			mit_ctrl(&hfdcan1, 0x07, ArmData.Grip.send_set, 0, ArmData.Grip.Kp, ArmData.Grip.Kd, 0);  //¼Ð×¦	
 		}
 		osDelay(5);
 		

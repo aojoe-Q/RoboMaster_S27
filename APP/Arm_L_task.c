@@ -1,4 +1,5 @@
 #include "Arm_L_task.h"
+#include "Arm_USB_task.h"
 #include "DM_motor.h"
 #include "DJI_motor.h"
 #include "can_bsp.h"
@@ -62,10 +63,10 @@
   ButtonCounter left_button_btn;  
   ButtonCounter right_button_btn;
   ArmData_t ArmData;
+  volatile uint8_t Arm_L_Ready = 0;  /* set when Arm_L_Init() has finished */
   RC_contorl_t RC_contorl;
   
   joint_motor_measure_t joint_L_motor[7];
-
   
   
   /*��ʼ��̬*/
@@ -86,7 +87,7 @@
   double J1_ramp=0,J2_ramp=0,J3_ramp=0,J4_ramp=0,J5_ramp=0,J6_ramp=0,Grip_ramp=0;
   
   int i=1;//���ԣ�
-
+	
 void Arm_L_Task(void const * argument)
 {
 	static uint8_t prev_ArmMode = 0xFF;
@@ -108,26 +109,39 @@ void Arm_L_Task(void const * argument)
 				ArmData.J6.RC_Sum_Value = ArmData.J6.position - J6_zero_position - Custom_RC[5].DM_CC_receive - ArmData.J6.Key_Control_Value;
 				ArmData.Grip.RC_Sum_Value = ArmData.Grip.position - grip_zero_position;
 			}
+			else if (ArmData.ArmMode == ARM_MODE_PC_CONTROL)
+			{
+				Arm_PC_Control_Enter();
+			}
+			/* Leaving PC mode (or never in it): an enable from before the
+			   switch must not move the arm when it comes back. */
+			if (ArmData.ArmMode != ARM_MODE_PC_CONTROL)
+			{
+				Arm_USB_PC_Disarm();
+			}
 			prev_ArmMode = ArmData.ArmMode;
 		}
 
 		switch (ArmData.ArmMode)
         {
-//					
-//			case TAKE_WATER:
-//				TAKE_WATER_1();
-//				break;
-			case grip_homing:
-				grip_homing_1();
+					
+			case TAKE_WATER:
+				TAKE_WATER_1();
 				break;
-//			case ARM_RESET:
-//				ARM_RESET_1();
-//				break;
-//			case TAKE_Grip:
-//				TAKE_Grip_1();
-//			break;
+			case PASS_WATER:
+				PASS_WATER_1();
+				break;
+			case ARM_RESET:
+				ARM_RESET_1();
+				break;
+			case TAKE_Grip:
+				TAKE_Grip_1();
+			break;
 			case ARM_L_MOVEMENT_J1_J4:
 				Arm_L_Movement_J1_J4();
+			break;
+			case ARM_MODE_PC_CONTROL:
+				Arm_PC_Control();
 			break;
 
 			case ARM_POWERLESS:
@@ -148,15 +162,16 @@ void Arm_L_Task(void const * argument)
 /************************* ��ʼ�� *************************/
 void Arm_L_Init(void)
 {
-	osDelay(750);
+	osDelay(950);
 	button_init(&left_button_btn);
 	button_init(&right_button_btn);
 	
 	/*�ؽڵ��ʹ��*/
+	osDelay(15);
 	enable_motor_mode(&hfdcan1, 0x01, 0);
-	osDelay(5);
+	osDelay(15);
 	enable_motor_mode(&hfdcan1, 0x02, 0);
-	osDelay(10);
+	osDelay(15);
 	enable_motor_mode(&hfdcan1, 0x03, 0);
 	osDelay(10);
 	enable_motor_mode(&hfdcan1, 0x04, 0);
@@ -164,9 +179,9 @@ void Arm_L_Init(void)
 	enable_motor_mode(&hfdcan1, 0x05, 0);
 	osDelay(5);
 	enable_motor_mode(&hfdcan1, 0x06, 0);
-	osDelay(25);
+	osDelay(5);
 	enable_motor_mode(&hfdcan1, 0x07, 0);
-	osDelay(25);
+	osDelay(5);
 	
 	
 //	save_motor_zero(&hfdcan1, 0X01, 0);
@@ -179,9 +194,8 @@ void Arm_L_Init(void)
 //	osDelay(5);
 //	save_motor_zero(&hfdcan1, 0X05, 0);
 //	osDelay(5);
-//	save_motor_zero(&hfdcan1, 0X07, 0);
+//	save_motor_zero(&hfdcan1, 0X06, 0);
 //	osDelay(5);
-	
 	//���ֵ��λ��
 	ArmData.J1.send_set=joint_L_motor[0].position;
 	ArmData.J2.send_set=joint_L_motor[1].position;
@@ -296,6 +310,7 @@ do{
 	arm_data_ramp_init(&J6_L_position_set,1,0);
 	arm_data_ramp_init(&grip_L_position_set,1,0);
 	vTaskDelay(10);
+	Arm_L_Ready = 1;
 }
 
 /************************* ���ݸ��� *************************/
@@ -322,28 +337,29 @@ void data_updata(void)
 	ArmData.Grip.position = joint_L_motor[6].position;
 }
 
-/************************* ģʽ�ж� *************************/
+/************************* 模式判断 *************************/
 uint8_t GetArmMode(void)
 {
     uint8_t mode = 0;
 
-    // �жϾ���ģʽ
-	if(switch_is_up(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 1
+    /* 左上右上：只执行 PC 控制（覆盖原 TAKE_WATER）。PC 未使能、指令超时、
+       USB 断开或 CAN 反馈丢失时，Arm_PC_Control() 保持锁存的当前位置。 */
+	if (switch_is_up(RCData.rc.s[RC_Right]) && switch_is_up(RCData.rc.s[RC_Left]))
 	{
-			mode = TAKE_WATER;
+			mode = ARM_MODE_PC_CONTROL;
 	}
-	else if (switch_is_down(RCData.rc.s[RC_Right])&&switch_is_mid(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 0
+	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 0
 	{
-			mode = grip_homing;
+			mode = PASS_WATER;
 	}
-//	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_mid(RCData.rc.s[RC_Left]))  //RC_contorl.RC->rc.shutter == 1  //switch_is_up(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left])
-//	{
-//			mode = ARM_RESET;
-//	}
-//	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_down(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
-//	{
-//			mode = PASS_WATER;/*�ع��ʼ��̬*/
-//	}
+	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_mid(RCData.rc.s[RC_Left]))  //RC_contorl.RC->rc.shutter == 1  //switch_is_up(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left])
+	{
+			mode = ARM_RESET;
+	}
+	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_down(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
+	{
+			mode = TAKE_Grip;/*�ع��ʼ��̬*/
+	}
 		else if (switch_is_down(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
 	{
 			mode = ARM_L_MOVEMENT_J1_J4;/*�ع��ʼ��̬*/
@@ -474,7 +490,7 @@ void ARM_RESET_1(void)
 
 }
 
-void grip_homing_1(void)
+void PASS_WATER_1(void)
 {
 	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
 	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
@@ -492,7 +508,7 @@ void grip_homing_1(void)
 	J6_send_set = J6_TAKE_position;
 	Grip_send_set = Grip_TAKE_position_1;
 
-	J1_ramp= 0.0090,J2_ramp= 0.003,J3_ramp= 0.0045,J4_ramp= 0.0042,J5_ramp= 0.003,J6_ramp= 0.003,Grip_ramp= 0.090;  
+	J1_ramp= 0.0090,J2_ramp= 0.003,J3_ramp= 0.0045,J4_ramp= 0.0042,J5_ramp= 0.003,J6_ramp= 0.003,Grip_ramp= 0.030;  
 
 	
 	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
@@ -503,7 +519,7 @@ void grip_homing_1(void)
 	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
 	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
 
-	/*斜坡函数*/
+	/*б�º���*/
 	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
 	arm_ramp_calc(&J2_L_position_set,J2_ramp,J2_send_set);
 	arm_ramp_calc(&J3_L_position_set,J3_ramp,J3_send_set);
@@ -512,7 +528,7 @@ void grip_homing_1(void)
 	arm_ramp_calc(&J6_L_position_set,J6_ramp,J6_send_set);
 	arm_ramp_calc(&grip_L_position_set,Grip_ramp,Grip_send_set);
 
-	/*赋值*/
+	/*���λ�ø�ֵ*/
 	ArmData.J1.send_set = J1_L_position_set.out;
 	ArmData.J2.send_set = J2_L_position_set.out;
 	ArmData.J3.send_set = J3_L_position_set.out;
@@ -520,6 +536,8 @@ void grip_homing_1(void)
 	ArmData.J5.send_set = J5_L_position_set.out;
 	ArmData.J6.send_set = J6_L_position_set.out;
 	ArmData.Grip.send_set = grip_L_position_set.out;
+
+
 }
 
 void TAKE_WATER_1(void)
@@ -1090,7 +1108,89 @@ void Arm_Powerless(void)
 	ArmData.J5.RC_Sum_Value = 0;
 	ArmData.J6.RC_Sum_Value = 0;
 	ArmData.Grip.RC_Sum_Value = 0;
-	
+
+}
+
+/************************* PC 控制模式 (ROS 2 / MoveIt) *************************/
+static uint8_t pc_holding = 0;   /* 1: 已锁存保持位置 */
+
+/* 每次进入 PC 模式时调用：下一次没有有效目标时重新锁存当前位置 */
+void Arm_PC_Control_Enter(void)
+{
+	pc_holding = 0;
+}
+
+void Arm_PC_Control(void)
+{
+	static float pc_target[7];
+	static float hold_position[7];
+	uint8_t got_target;
+
+	/* 设置正常 PID 增益（参数不变） */
+	ArmData.J1.Kp = J1_PID_KP; ArmData.J1.Kd = J1_PID_KD;
+	ArmData.J2.Kp = J2_PID_KP; ArmData.J2.Kd = J2_PID_KD;
+	ArmData.J3.Kp = J3_PID_KP; ArmData.J3.Kd = J3_PID_KD;
+	ArmData.J4.Kp = J4_PID_KP; ArmData.J4.Kd = J4_PID_KD;
+	ArmData.J5.Kp = J5_PID_KP; ArmData.J5.Kd = J5_PID_KD;
+	ArmData.J6.Kp = J6_PID_KP; ArmData.J6.Kd = J6_PID_KD;
+	ArmData.Grip.Kp = J6_PID_KP; ArmData.Grip.Kd = J6_PID_KD;
+
+	/* 尝试读取 PC 目标（USB 任务已检查会话、使能、超时、USB 连接、CAN 反馈） */
+	got_target = Arm_USB_Get_PC_Target(pc_target);
+
+	if (got_target)
+	{
+		/* 目标有效：跟随 PC 指令 */
+		pc_holding = 0;
+		ArmData.J1.send_set = pc_target[0];
+		ArmData.J2.send_set = pc_target[1];
+		ArmData.J3.send_set = pc_target[2];
+		ArmData.J4.send_set = pc_target[3];
+		ArmData.J5.send_set = pc_target[4];
+		ArmData.J6.send_set = pc_target[5];
+		ArmData.Grip.send_set = pc_target[6];
+	}
+	else
+	{
+		/* 目标无效（超时/断开/CAN 丢失）：锁存并保持当前位置（安全动作 A） */
+		if (!pc_holding)
+		{
+			hold_position[0] = ArmData.J1.position;
+			hold_position[1] = ArmData.J2.position;
+			hold_position[2] = ArmData.J3.position;
+			hold_position[3] = ArmData.J4.position;
+			hold_position[4] = ArmData.J5.position;
+			hold_position[5] = ArmData.J6.position;
+			hold_position[6] = ArmData.Grip.position;
+			pc_holding = 1;
+		}
+		ArmData.J1.send_set = hold_position[0];
+		ArmData.J2.send_set = hold_position[1];
+		ArmData.J3.send_set = hold_position[2];
+		ArmData.J4.send_set = hold_position[3];
+		ArmData.J5.send_set = hold_position[4];
+		ArmData.J6.send_set = hold_position[5];
+		ArmData.Grip.send_set = hold_position[6];
+	}
+
+	/* 标准静态限位（防御深度）。PC 模式不执行 J1/J2 碰撞区限位，
+	   该限位只在遥控模式中生效。 */
+	limitPosition(&ArmData.J1.send_set, J1_Max_position, J1_Min_position);
+	limitPosition(&ArmData.J2.send_set, J2_Max_position, J2_Min_position);
+	limitPosition(&ArmData.J3.send_set, J3_Max_position, J3_Min_position);
+	limitPosition(&ArmData.J4.send_set, J4_Max_position, J4_Min_position);
+	limitPosition(&ArmData.J5.send_set, J5_Max_position, J5_Min_position);
+	limitPosition(&ArmData.J6.send_set, J6_Max_position, J6_Min_position);
+	limitPosition(&ArmData.Grip.send_set, Grip_Max_position, Grip_Min_position);
+
+	/* 同步斜坡状态，防止切出 PC 模式后跳变 */
+	J1_L_position_set.out = ArmData.J1.send_set;
+	J2_L_position_set.out = ArmData.J2.send_set;
+	J3_L_position_set.out = ArmData.J3.send_set;
+	J4_L_position_set.out = ArmData.J4.send_set;
+	J5_L_position_set.out = ArmData.J5.send_set;
+	J6_L_position_set.out = ArmData.J6.send_set;
+	grip_L_position_set.out = ArmData.Grip.send_set;
 }
 
 /*************************************ң��������*******************************************/
@@ -1118,11 +1218,11 @@ void Arm_L_Movement_J1_J4(void)
 	ArmData.J4.RC_Sum_Value += channel_1*0.00002;
 	ArmData.J5.RC_Sum_Value += channel_2*0.00002;
 	ArmData.J6.RC_Sum_Value += channel_2*0.00002;
-	ArmData.Grip.RC_Sum_Value += channel_3*0.0003;
+	ArmData.Grip.RC_Sum_Value += channel_3*0.00005;
 
-	if(joint_L_motor[1].position < 0.496871948f)
+	if(joint_L_motor[1].position < J1_J2_ZONE_J2_MAX)
 	{
-		limitPosition(&ArmData.J1.RC_Sum_Value,J1_Max_position - ArmData.J1.Initial_Total_position,-0.282964571 - ArmData.J1.Initial_Total_position);
+		limitPosition(&ArmData.J1.RC_Sum_Value,J1_Max_position - ArmData.J1.Initial_Total_position,J1_J2_ZONE_J1_MIN - ArmData.J1.Initial_Total_position);
 	}	
 	else
 	{
@@ -1146,9 +1246,9 @@ void Arm_L_Movement_J1_J4(void)
 	J6_send_set = J6_zero_position + ArmData.J6.RC_Sum_Value + Custom_RC[5].DM_CC_receive + ArmData.J6.Key_Control_Value;
 	Grip_send_set = grip_zero_position + ArmData.Grip.RC_Sum_Value + ArmData.Grip.Key_Control_Value;
 	
-	if(joint_L_motor[1].position < 0.496871948f)
+	if(joint_L_motor[1].position < J1_J2_ZONE_J2_MAX)
 	{
-		limitPosition(&J1_send_set,J1_Max_position,-0.282964571);
+		limitPosition(&J1_send_set,J1_Max_position,J1_J2_ZONE_J1_MIN);
 	}	
 	else
 	{
@@ -1181,7 +1281,7 @@ void Arm_L_Movement_J1_J4(void)
 	limitPosition(&ArmData.J4.RC_Sum_Value,J4_Max_position - ArmData.J4.Initial_Total_position - ArmData.J4.Key_Control_Value,J4_Min_position - ArmData.J4.Initial_Total_position - ArmData.J4.Key_Control_Value);
 	limitPosition(&ArmData.J5.RC_Sum_Value,J5_Max_position - ArmData.J5.Initial_Total_position,J5_Min_position - ArmData.J5.Initial_Total_position);
 	limitPosition(&ArmData.J6.RC_Sum_Value,J6_Max_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value,J6_Min_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value);
-	limitPosition(&ArmData.Grip.RC_Sum_Value,Grip_Max_position - grip_zero_position - ArmData.Grip.Key_Control_Value,Grip_Min_position - grip_zero_position - ArmData.Grip.Key_Control_Value);
+	limitPosition(&ArmData.Grip.RC_Sum_Value,J6_Max_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value,J6_Min_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value);
 
 //				J1_send_set = R_J1_get_position_1;
 //				J2_send_set = R_J2_get_position_1;
@@ -1190,9 +1290,9 @@ void Arm_L_Movement_J1_J4(void)
 //				J5_send_set = R_J5_get_position_1;
 //				J6_send_set = R_J6_get_position_1;
 //				Grip_send_set =R_Grip_get_position_1;	
-	if(joint_L_motor[1].position < 0.496871948f)
+	if(joint_L_motor[1].position < J1_J2_ZONE_J2_MAX)
 	{
-		limitPosition(&ArmData.J1.send_set,J1_Max_position,-0.17605114);
+		limitPosition(&ArmData.J1.send_set,J1_Max_position,J1_J2_ZONE_J1_MIN);
 	}	
 	else
 	{

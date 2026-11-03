@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file           : MiniPC.c
-  * @brief          : MiniPC interfaces functions 
+  * @brief          : MiniPC interfaces functions
   * @author         : GarssFan Wang
   * @date           : 2025/01/22
   * @version        : v1.0
@@ -16,16 +16,27 @@
 #include "MiniPC.h"
 #include "usbd_cdc_if.h"
 
+extern USBD_HandleTypeDef hUsbDeviceHS;
 
-void MiniPC_Transmit_Info(uint8_t *Buff){
-
-    CDC_Transmit_HS(Buff,sizeof(*Buff));
-
+bool MiniPC_Is_Connected(void)
+{
+    return (hUsbDeviceHS.dev_state == USBD_STATE_CONFIGURED) &&
+           (hUsbDeviceHS.pClassData != NULL);
 }
 
-//usbd_cdc_if.c -> CDC_Receive_HS
-void MiniPC_Recvive_Info(uint8_t* Buff, const uint32_t *Len){
+bool MiniPC_Tx_Busy(void)
+{
+    USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef *)hUsbDeviceHS.pClassData;
+    return (hcdc == NULL) || (hcdc->TxState != 0U);
+}
 
-
-
+/* The buffer must stay untouched until MiniPC_Tx_Busy() returns false:
+   the transfer runs asynchronously from it. */
+uint8_t MiniPC_Transmit_Info(const uint8_t *buf, uint16_t len)
+{
+    if (!MiniPC_Is_Connected())
+    {
+        return USBD_FAIL;
+    }
+    return CDC_Transmit_HS((uint8_t *)buf, len);
 }

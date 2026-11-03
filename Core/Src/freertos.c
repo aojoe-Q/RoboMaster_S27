@@ -30,6 +30,7 @@
 #include "Moter_task.h"
 #include "referee_usart_task.h"
 #include "can_bsp.h"
+#include "Arm_USB_task.h"
 
 /* USER CODE END Includes */
 
@@ -50,6 +51,10 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
+/* USB link to ROS2: 100 Hz STATE, PC command parsing. */
+osThreadId App_Arm_USB_TaskHandle;
+uint32_t App_Arm_USB_TaskBuffer[ 1024 ];
+osStaticThreadDef_t App_Arm_USB_TaskControlBlock;
 
 /* USER CODE END Variables */
 osThreadId Start_INS_TaskHandle;
@@ -169,6 +174,11 @@ void MX_FREERTOS_Init(void) {
   osThreadStaticDef(App_RC_Task, APP_RC_Task, osPriorityBelowNormal, 0, 512,
                     App_RC_TaskBuffer, &App_RC_TaskControlBlock);
   App_RC_TaskHandle = osThreadCreate(osThread(App_RC_Task), NULL);
+
+  /* USB link to ROS2: 100 Hz STATE, PC command parsing (never drives motors). */
+  osThreadStaticDef(App_Arm_USB_Task, Arm_USB_Task, osPriorityBelowNormal, 0, 1024,
+                    App_Arm_USB_TaskBuffer, &App_Arm_USB_TaskControlBlock);
+  App_Arm_USB_TaskHandle = osThreadCreate(osThread(App_Arm_USB_Task), NULL);
   /* USER CODE END RTOS_THREADS */
 
 }

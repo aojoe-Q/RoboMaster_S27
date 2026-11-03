@@ -48,3 +48,7 @@ Desktop.ini
 *.log
 __pycache__/
 *.pyc
+# ===== S27_TEST_2 ×¨Êô =====
+_backup_*/
+_archived_*/
+tools/selftest/build/

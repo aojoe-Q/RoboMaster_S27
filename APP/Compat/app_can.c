@@ -165,6 +165,9 @@ static void APP_DecodeJoint(uint8_t joint, const uint8_t *data)
     motor->position = uint_to_float(motor->p_int, P_MIN, P_MAX, 16);
     motor->velocity = uint_to_float(motor->v_int, V_MIN, V_MAX, 12);
     motor->torque   = uint_to_float(motor->t_int, T_MIN, T_MAX, 12);
+    /* FDCAN RX interrupt (priority 5, FreeRTOS-safe). */
+    motor->update_tick = (uint32_t)xTaskGetTickCountFromISR();
+    motor->update_count++;
 }
 
 /*

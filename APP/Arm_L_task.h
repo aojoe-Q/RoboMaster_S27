@@ -26,9 +26,14 @@
 #define J5_Min_position -1.29562798f	 
 #define J6_Max_position 2.22337666f		
 #define J6_Min_position -2.25160637f 
-#define Grip_Max_position 11.985f    	 
-#define Grip_Min_position -11.0286484f		
+#define Grip_Max_position 0.7f    	 
+#define Grip_Min_position 0.0f		
 /*������λ*/
+/* J1/J2 collision zone: while measured J2 is below J1_J2_ZONE_J2_MAX the
+   J1 lower limit tightens to J1_J2_ZONE_J1_MIN. RC mode only; PC mode
+   (Arm_PC_Control) applies the static J1 limits. */
+#define J1_J2_ZONE_J2_MAX  0.496871948f
+#define J1_J2_ZONE_J1_MIN  (-0.17605114f)
 #define Special_J2_limit 0.0635156631
 #define J1_Special_Max_position 0.215261688
 #define J1_Special_Min_position -0.215261688  //�����������??
@@ -143,7 +148,7 @@
 #define J4_TAKE_position -1.98577118f
 #define J5_TAKE_position -0.972190857f
 #define J6_TAKE_position  0.0143051147f
-#define Grip_TAKE_position_1 0.0f
+#define Grip_TAKE_position_1 0.714694023f
 //RESET ARM
 #define J1_reset_position 0.0f
 #define J2_reset_position 0.0852594376f
@@ -169,11 +174,12 @@ typedef enum
 	CHASSIS_MOVEMENT_ARM_KEEP,   //�����ڱ�������������˶�??
 	ARM_POWERLESS,
 	TAKE_WATER,//ֹͣģʽ
-	grip_homing,
+	PASS_WATER,
 	ARM_RESET,
 	TAKE_Grip,
+	ARM_MODE_PC_CONTROL,         /* PC (ROS 2 / MoveIt) control, appended: keeps existing values */
 
-}Arm_mode_t; 
+}Arm_mode_t;
 
 typedef  struct
 {
@@ -221,6 +227,7 @@ typedef struct
 
 extern Custom_controller_t Custom_RC[6];
 extern	ArmData_t ArmData;
+extern volatile uint8_t Arm_L_Ready;
 
 void Arm_L_Task(void const * argument);
 void Arm_L_Init(void);
@@ -234,8 +241,10 @@ void Arm_L_Movement_J1_J4(void);
 void Arm_return_initial_position(void);
 void Chassis_Movement(void);
 void Arm_Powerless(void);
+void Arm_PC_Control(void);        // PC control mode (ROS 2 / MoveIt)
+void Arm_PC_Control_Enter(void);  // call once when entering PC mode
 void TAKE_WATER_1(void);
-void grip_homing_1(void);
+void PASS_WATER_1(void);
 //void TAKE_GRIP(void);
 void ARM_RESET_1(void);
 void TAKE_Grip_1(void);

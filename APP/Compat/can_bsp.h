@@ -124,6 +124,8 @@ typedef struct
     int      v_int;
     int      t_int;
     float    torque;
+    uint32_t update_tick;       /* RTOS tick of the last decoded feedback */
+    uint32_t update_count;      /* 0 until the first feedback arrives     */
 } joint_motor_measure_t;
 
 typedef struct

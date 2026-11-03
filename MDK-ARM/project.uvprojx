@@ -460,6 +460,36 @@
               <FileType>5</FileType>
               <FilePath>..\APP\referee_usart_task.h</FilePath>
             </File>
+            <File>
+              <FileName>Arm_USB_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\Arm_USB_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>Arm_USB_task.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\APP\Arm_USB_task.h</FilePath>
+            </File>
+            <File>
+              <FileName>arm_usb_protocol.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\arm_usb_protocol.c</FilePath>
+            </File>
+            <File>
+              <FileName>arm_usb_protocol.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\APP\arm_usb_protocol.h</FilePath>
+            </File>
+            <File>
+              <FileName>ring_buffer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\ring_buffer.c</FilePath>
+            </File>
+            <File>
+              <FileName>ring_buffer.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\APP\ring_buffer.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
