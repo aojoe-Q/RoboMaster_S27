@@ -278,7 +278,7 @@
               <OCR_RVCT4>
                 <Type>1</Type>
                 <StartAddress>0x8000000</StartAddress>
-                <Size>0x100000</Size>
+                <Size>0xc0000</Size>
               </OCR_RVCT4>
               <OCR_RVCT5>
                 <Type>1</Type>
@@ -415,6 +415,36 @@
         <Group>
           <GroupName>Application/APP</GroupName>
           <Files>
+            <File>
+              <FileName>master_link.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\master_link.c</FilePath>
+            </File>
+            <File>
+              <FileName>arm_gate.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\arm_gate.c</FilePath>
+            </File>
+            <File>
+              <FileName>arm_output.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\arm_output.c</FilePath>
+            </File>
+            <File>
+              <FileName>arm_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\arm_control.c</FilePath>
+            </File>
+            <File>
+              <FileName>multi_turn_store.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\multi_turn_store.c</FilePath>
+            </File>
+            <File>
+              <FileName>multi_turn_flash_h7.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\APP\multi_turn_flash_h7.c</FilePath>
+            </File>
             <File>
               <FileName>Arm_L_task.c</FileName>
               <FileType>1</FileType>

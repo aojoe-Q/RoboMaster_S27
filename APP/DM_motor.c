@@ -8,6 +8,8 @@ extern FDCAN_HandleTypeDef hfdcan1;
 extern FDCAN_HandleTypeDef hfdcan2;
 extern FDCAN_HandleTypeDef hfdcan3;
 #include "arm_math.h"
+#include "arm_output.h"
+#include <math.h>
 
 float Hex_To_Float(uint32_t *Byte,int num)//十六进制到浮点数
 {
@@ -59,6 +61,8 @@ float uint_to_float_DM(int x_int, float x_min, float x_max, int bits)
 /*使能*/
 void enable_motor_mode(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id)
 {
+    /* 门控关闭时机械臂七轴一律不使能，防止重新上电后被旧命令拉走。 */
+    if (hcan==&hfdcan1 && motor_id>=1 && motor_id<=7 && ArmOutput_IsLocked()) return;
 	uint8_t data[8];
 	uint16_t id = motor_id + mode_id;
 	
@@ -93,6 +97,8 @@ void unenable_motor_mode(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id)
 /*保存位置零点*/
 void save_motor_zero(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id)
 {
+    /* 位姿未确认时不允许写零点，禁止用“设零”掩盖丢圈。 */
+    if (hcan==&hfdcan1 && motor_id>=1 && motor_id<=7 && ArmOutput_IsLocked()) return;
 	uint8_t data[8];
 	uint16_t id = motor_id + mode_id;
 	
@@ -123,6 +129,16 @@ void save_motor_zero(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id)
 **/
 void mit_ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel,float kp, float kd, float torq)
 {
+    /* 门控关闭，或任一字段非有限/越界：改发全零增益帧，绝不下发原始命令。 */
+    if ((hcan==&hfdcan1 && motor_id>=1 && motor_id<=7 && ArmOutput_IsLocked()) ||
+        !isfinite(pos) || pos<P_MIN || pos>P_MAX ||
+        !isfinite(vel) || vel<V_MIN || vel>V_MAX ||
+        !isfinite(kp) || kp<KP_MIN || kp>KP_MAX ||
+        !isfinite(kd) || kd<KD_MIN || kd>KD_MAX ||
+        !isfinite(torq) || torq<T_MIN || torq>T_MAX) {
+        pos=0; vel=0; kp=0; kd=0; torq=0;
+    }
+
 	uint8_t data[8];
 	uint16_t pos_tmp,vel_tmp,kp_tmp,kd_tmp,tor_tmp;
 	uint16_t id = motor_id + MIT_MODE;
@@ -156,6 +172,8 @@ void mit_ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel,float kp, fl
 **/
 void pos_speed_ctrl(hcan_t* hcan,uint16_t motor_id, float pos, float vel)
 {
+    /* 同上：门控关闭时七轴的位置速度环命令一律丢弃。 */
+    if (hcan==&hfdcan1 && motor_id>=1 && motor_id<=7 && ArmOutput_IsLocked()) return;
 	uint16_t id;
 	uint8_t *pbuf, *vbuf;
 	uint8_t data[8];
@@ -188,6 +206,8 @@ void pos_speed_ctrl(hcan_t* hcan,uint16_t motor_id, float pos, float vel)
 **/
 void speed_ctrl(hcan_t* hcan,uint16_t motor_id, float vel)
 {
+    /* 同上：门控关闭时七轴的速度命令一律丢弃。 */
+    if (hcan==&hfdcan1 && motor_id>=1 && motor_id<=7 && ArmOutput_IsLocked()) return;
 	uint16_t id;
 	uint8_t *vbuf;
 	uint8_t data[4];

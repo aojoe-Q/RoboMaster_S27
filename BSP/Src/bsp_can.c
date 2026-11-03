@@ -209,7 +209,12 @@ static void FDCAN2_RxFifo1RxHandler(uint32_t *Identifier,uint8_t Data[8])
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 { 
   
-	HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &FDCAN_RxFIFO0Frame.Header, FDCAN_RxFIFO0Frame.Data);
+	/* 取帧失败（FIFO 竞争或溢出）直接返回，避免拿上次残留数据当新帧解析。 */
+	if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &FDCAN_RxFIFO0Frame.Header, FDCAN_RxFIFO0Frame.Data)!=HAL_OK) return;
+	/* DLC、标准帧、数据帧三项缺一即丢弃，防止影子板或扩展帧混进七轴解析。 */
+    if (FDCAN_RxFIFO0Frame.Header.DataLength!=FDCAN_DLC_BYTES_8 ||
+        FDCAN_RxFIFO0Frame.Header.IdType!=FDCAN_STANDARD_ID ||
+        FDCAN_RxFIFO0Frame.Header.RxFrameType!=FDCAN_DATA_FRAME) return;
 	
   if(hfdcan == &hfdcan1){	
 	
@@ -236,7 +241,10 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 { 
   
-	HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO1, &FDCAN_RxFIFO1Frame.Header, FDCAN_RxFIFO1Frame.Data);
+	if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO1, &FDCAN_RxFIFO1Frame.Header, FDCAN_RxFIFO1Frame.Data)!=HAL_OK) return;
+    if (FDCAN_RxFIFO1Frame.Header.DataLength!=FDCAN_DLC_BYTES_8 ||
+        FDCAN_RxFIFO1Frame.Header.IdType!=FDCAN_STANDARD_ID ||
+        FDCAN_RxFIFO1Frame.Header.RxFrameType!=FDCAN_DATA_FRAME) return;
 	
   FDCAN2_RxFifo1RxHandler(&FDCAN_RxFIFO1Frame.Header.Identifier,FDCAN_RxFIFO1Frame.Data);
 	 

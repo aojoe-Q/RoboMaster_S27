@@ -4,6 +4,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "Remote_Control.h"
 #include "ramp.h"
+#include "arm_input.h"
+#include "stm32h7xx_hal.h"
 
 /* Exported variables ---------------------------------------------------------*/
 /**
@@ -77,6 +79,7 @@ void SBUS_TO_RC(volatile const uint8_t *sbus_buf, Remote_Info_Typedef  *remote_c
 		
 		/* reset the lost flag */
 		remote_ctrl->rc_lost = false;
+    arm_dt7_tick=HAL_GetTick(); arm_dt7_seq++;
 }
 //------------------------------------------------------------------------------
 

@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32h7xx_it.h"
+#include "multi_turn_store.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "remote_control.h"
@@ -98,6 +99,8 @@ extern TIM_HandleTypeDef htim2;
   */
 void NMI_Handler(void)
 {
+  /* 先把故障现场（PC/LR/CFSR/HFSR 与栈帧）记录到日志区调试字段，再停在这里。 */
+  MT_H7_FaultCapture();
   /* USER CODE BEGIN NonMaskableInt_IRQn 0 */
 
   /* USER CODE END NonMaskableInt_IRQn 0 */
@@ -113,6 +116,8 @@ void NMI_Handler(void)
   */
 void HardFault_Handler(void)
 {
+  /* 先把故障现场（PC/LR/CFSR/HFSR 与栈帧）记录到日志区调试字段，再停在这里。 */
+  MT_H7_FaultCapture();
   /* USER CODE BEGIN HardFault_IRQn 0 */
 
   /* USER CODE END HardFault_IRQn 0 */
@@ -143,6 +148,8 @@ void MemManage_Handler(void)
   */
 void BusFault_Handler(void)
 {
+  /* 先把故障现场（PC/LR/CFSR/HFSR 与栈帧）记录到日志区调试字段，再停在这里。 */
+  MT_H7_FaultCapture();
   /* USER CODE BEGIN BusFault_IRQn 0 */
 
   /* USER CODE END BusFault_IRQn 0 */

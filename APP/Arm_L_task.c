@@ -10,6 +10,9 @@
 #include "LK_motor.h"
 #include "referee_usart_task.h"
 #include "math.h"
+#include "arm_output.h"
+#include "multi_turn_store.h"
+#include "arm_control.h"
 /**
  * @brief ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Åºï¿½Ó¦ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÆµÄºê¶¨ï¿½å¡£
  *
@@ -93,6 +96,7 @@ void Arm_L_Task(void const * argument)
 	Arm_L_Init();
 	while (1)
 	{
+		ArmControl_Step(HAL_GetTick());
 		data_updata();
 
 		/* ï¿½ï¿½âµ½ï¿½ï¿½Ä£Ê½ï¿½Ğ»ï¿½ï¿½ï¿½ï¿½Éµï¿½Ç°Î»ï¿½Ã³ï¿½Ê¼ï¿½ï¿½ RC_Sum_Valueï¿½ï¿½ï¿½Ø±ï¿½ï¿½ï¿½ï¿½ë£©ï¿½ï¿½ï¿½ï¿½Ö¹Î»ï¿½ï¿½ï¿½ï¿½Ô¾ */
@@ -104,8 +108,8 @@ void Arm_L_Task(void const * argument)
 				ArmData.J2.RC_Sum_Value = ArmData.J2.position - J2_zero_position;
 				ArmData.J3.RC_Sum_Value = ArmData.J3.position - J3_zero_position;
 				ArmData.J4.RC_Sum_Value = ArmData.J4.position - J4_zero_position;
-				ArmData.J5.RC_Sum_Value = ArmData.J5.position - J5_zero_position - Custom_RC[4].DM_CC_receive - ArmData.J5.Key_Control_Value;
-				ArmData.J6.RC_Sum_Value = ArmData.J6.position - J6_zero_position - Custom_RC[5].DM_CC_receive - ArmData.J6.Key_Control_Value;
+				ArmData.J5.RC_Sum_Value = ArmData.J5.position - J5_zero_position - ArmData.J5.Key_Control_Value;
+				ArmData.J6.RC_Sum_Value = ArmData.J6.position - J6_zero_position - ArmData.J6.Key_Control_Value;
 				ArmData.Grip.RC_Sum_Value = ArmData.Grip.position - grip_zero_position;
 			}
 			prev_ArmMode = ArmData.ArmMode;
@@ -130,6 +134,16 @@ void Arm_L_Task(void const * argument)
 				Arm_L_Movement_J1_J4();
 			break;
 
+			case ARM_CUSTOM_CONTROL:
+				/* »¹Ã»ÓĞÓ³ÉäÈÎºÎÖ÷ÊÖÖá£º×Ô¶¨Òå¿ØÖÆ±£³Ö»úĞµ±ÛÎŞÁ¦¡£ */
+				Arm_Powerless();
+			break;
+
+			case ARM_ALIGN:
+				/* ¶ÔÆë¾ø²»²úÉúÁ¦£¬Ò²¾ø²»ÇåÁãÈÎºÎÖá¡£ */
+				Arm_Powerless();
+			break;
+
 			case ARM_POWERLESS:
 				Arm_Powerless();
 			break;
@@ -138,6 +152,8 @@ void Arm_L_Task(void const * argument)
 				Arm_Powerless();
             break;
         }
+        ArmOutput_Publish();
+        MT_Maintenance_Service();
 		osDelay(8);
 		
 	}
@@ -148,154 +164,15 @@ void Arm_L_Task(void const * argument)
 /************************* ï¿½ï¿½Ê¼ï¿½ï¿½ *************************/
 void Arm_L_Init(void)
 {
-	osDelay(750);
-	button_init(&left_button_btn);
-	button_init(&right_button_btn);
-	
-	/*ï¿½Ø½Úµï¿½ï¿½Ê¹ï¿½ï¿½*/
-	enable_motor_mode(&hfdcan1, 0x01, 0);
-	osDelay(5);
-	enable_motor_mode(&hfdcan1, 0x02, 0);
-	osDelay(10);
-	enable_motor_mode(&hfdcan1, 0x03, 0);
-	osDelay(10);
-	enable_motor_mode(&hfdcan1, 0x04, 0);
-	osDelay(5);
-	enable_motor_mode(&hfdcan1, 0x05, 0);
-	osDelay(5);
-	enable_motor_mode(&hfdcan1, 0x06, 0);
-	osDelay(25);
-	enable_motor_mode(&hfdcan1, 0x07, 0);
-	osDelay(25);
-	
-	
-//	save_motor_zero(&hfdcan1, 0X01, 0);
-//	osDelay(5);
-//	save_motor_zero(&hfdcan1, 0X02, 0);
-//	osDelay(5);
-//	save_motor_zero(&hfdcan1, 0X03, 0);
-//	osDelay(5);
-//	save_motor_zero(&hfdcan1, 0X04, 0);
-//	osDelay(5);
-//	save_motor_zero(&hfdcan1, 0X05, 0);
-//	osDelay(5);
-//	save_motor_zero(&hfdcan1, 0X07, 0);
-//	osDelay(5);
-	
-	//ï¿½ï¿½ï¿½Öµï¿½ï¿½Î»ï¿½ï¿½
-	ArmData.J1.send_set=joint_L_motor[0].position;
-	ArmData.J2.send_set=joint_L_motor[1].position;
-	ArmData.J3.send_set=joint_L_motor[2].position;
-	ArmData.J4.send_set=joint_L_motor[3].position;
-	ArmData.J5.send_set=joint_L_motor[4].position;
-	ArmData.J6.send_set=joint_L_motor[5].position;
-	ArmData.Grip.send_set=joint_L_motor[6].position;
-	vTaskDelay(3600);
-	ArmData.J1.position=joint_L_motor[0].position;
-	ArmData.J2.position=joint_L_motor[1].position;
-	ArmData.J3.position=joint_L_motor[2].position;
-	ArmData.J4.position=joint_L_motor[3].position;
-	ArmData.J5.position=joint_L_motor[4].position;
-	ArmData.J6.position=joint_L_motor[5].position;
-	ArmData.Grip.position=joint_L_motor[6].position;
 
-	ArmData.J1.send_set=joint_L_motor[0].position;
-	ArmData.J2.send_set=joint_L_motor[1].position;
-	ArmData.J3.send_set=joint_L_motor[2].position;
-	ArmData.J4.send_set=joint_L_motor[3].position;
-	ArmData.J5.send_set=joint_L_motor[4].position;
-	ArmData.J6.send_set=joint_L_motor[5].position;
-	ArmData.Grip.send_set=joint_L_motor[6].position;
+    ArmControl_Init(HAL_GetTick());
+    button_init(&left_button_btn);
+    button_init(&right_button_btn);
+    ArmData.ArmMode=ARM_POWERLESS;
+    data_updata();
+    Arm_Powerless();
+    ArmOutput_Publish();
 
-	ArmData.J1.Initial_Total_position=ArmData.J1.position;
-	ArmData.J2.Initial_Total_position=ArmData.J2.position;	
-	ArmData.J3.Initial_Total_position=ArmData.J3.position;
-	ArmData.J4.Initial_Total_position=ArmData.J4.position;	
-	ArmData.J5.Initial_Total_position=ArmData.J5.position;
-	ArmData.J6.Initial_Total_position=ArmData.J6.position;	 
-	ArmData.Grip.Initial_Total_position=ArmData.Grip.position;	
-	
-//	RC_contorl.RC = get_RC_measure_point();  //VT13_rc_ctrl
-	
-
-	arm_data_ramp_init(&J1_L_position_set,1,ArmData.J1.Initial_Total_position);	
-	arm_data_ramp_init(&J2_L_position_set,1,ArmData.J2.Initial_Total_position); 
-	arm_data_ramp_init(&J3_L_position_set,1,ArmData.J3.Initial_Total_position);	
-	arm_data_ramp_init(&J4_L_position_set,1,ArmData.J4.Initial_Total_position); 
-	arm_data_ramp_init(&J5_L_position_set,1,ArmData.J5.Initial_Total_position);	
-	arm_data_ramp_init(&J6_L_position_set,1,ArmData.J6.Initial_Total_position);
-	arm_data_ramp_init(&grip_L_position_set,1,ArmData.Grip.Initial_Total_position);
-	
-	arm_data_ramp_init(&J4_L_key2_1_set,1,ArmData.J4.Initial_Total_position);
-	arm_data_ramp_init(&J4_L_key2_0_set,1,ArmData.J4.Initial_Total_position);
-	
-	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
-	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
-	ArmData.J3.Kp = J3_PID_KP;ArmData.J3.Kd = J3_PID_KD;
-	ArmData.J4.Kp = J4_PID_KP;ArmData.J4.Kd = J4_PID_KD;
-	ArmData.J5.Kp = J5_PID_KP;ArmData.J5.Kd = J5_PID_KD;
-	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
-	ArmData.Grip.Kp = Grip_PID_KP;ArmData.Grip.Kd = Grip_PID_KD;
-
-do{	
-	arm_ramp_calc(&J1_L_position_set,0.0038,J1_zero_position);
-	arm_ramp_calc(&J2_L_position_set,0.0035,J2_zero_position);
-	arm_ramp_calc(&J3_L_position_set,0.0035,J3_zero_position);
-	arm_ramp_calc(&J4_L_position_set,0.0035,J4_zero_position);
-	arm_ramp_calc(&J5_L_position_set,0.0035,J5_zero_position);
-	arm_ramp_calc(&J6_L_position_set,0.0035,J6_zero_position);
-	arm_ramp_calc(&grip_L_position_set,0.0035,grip_zero_position);
-	
-	ArmData.J1.send_set = J1_L_position_set.out;
-	ArmData.J2.send_set = J2_L_position_set.out;
-	ArmData.J3.send_set = J3_L_position_set.out;
-	ArmData.J4.send_set = J4_L_position_set.out;
-	ArmData.J5.send_set = J5_L_position_set.out;
-	ArmData.J6.send_set = J6_L_position_set.out;
-	ArmData.Grip.send_set = grip_L_position_set.out;
-	
-	limitPosition(&ArmData.J1.send_set,J1_Max_position,J1_Min_position);
-	limitPosition(&ArmData.J2.send_set,J2_Max_position,J2_Min_position);
-	limitPosition(&ArmData.J3.send_set,J3_Max_position,J3_Min_position);
-	limitPosition(&ArmData.J4.send_set,J4_Max_position,J4_Min_position);
-	limitPosition(&ArmData.J5.send_set,J5_Max_position,J5_Min_position);
-	limitPosition(&ArmData.J6.send_set,J6_Max_position,J6_Min_position);
-	limitPosition(&ArmData.Grip.send_set,Grip_Max_position,Grip_Min_position);
-
-	//ï¿½Ğ¶ï¿½ï¿½Ç·ï¿½Øµï¿½ï¿½ï¿½Ê¼ï¿½ï¿½Ì¬
-	if(J1_L_position_set.out == J1_zero_position && J2_L_position_set.out == J2_zero_position && J3_L_position_set.out == J3_zero_position && J4_L_position_set.out == J4_zero_position && J5_L_position_set.out == J5_zero_position && J6_L_position_set.out == J6_zero_position && grip_L_position_set.out == grip_zero_position)
-	{
-			J1_J2_J3_J4_J5_J6_J7_init_flag = 0;
-	}
-	osDelay(5);
-}while(J1_J2_J3_J4_J5_J6_J7_init_flag);
-
-
-	/*ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½*/
-	ArmData.J1.RC_Sum_Value = 0;
-	ArmData.J2.RC_Sum_Value = 0;
-	ArmData.J3.RC_Sum_Value = 0;
-	ArmData.J4.RC_Sum_Value = 0;
-	ArmData.J5.RC_Sum_Value = 0;
-	ArmData.J6.RC_Sum_Value = 0;
-	ArmData.Grip.RC_Sum_Value = 0;
-
-	ArmData.J1.Key_Control_Value = 0;
-	ArmData.J2.Key_Control_Value = 0;
-	ArmData.J3.Key_Control_Value = 0;
-	ArmData.J4.Key_Control_Value = 0;
-	ArmData.J5.Key_Control_Value = 0;
-	ArmData.J6.Key_Control_Value = 0;
-	ArmData.Grip.Key_Control_Value = 0;
-
-    arm_data_ramp_init(&J1_L_position_set,1,0);	
-	arm_data_ramp_init(&J2_L_position_set,1,0); 
-	arm_data_ramp_init(&J3_L_position_set,1,J3_zero_position);	
-	arm_data_ramp_init(&J4_L_position_set,1,0); 
-	arm_data_ramp_init(&J5_L_position_set,1,0);	
-	arm_data_ramp_init(&J6_L_position_set,1,0);
-	arm_data_ramp_init(&grip_L_position_set,1,0);
-	vTaskDelay(10);
 }
 
 /************************* ï¿½ï¿½ï¿½İ¸ï¿½ï¿½ï¿½ *************************/
@@ -313,61 +190,22 @@ void data_updata(void)
 	
 	ArmData.ArmMode = GetArmMode();
 	
-	ArmData.J1.position = joint_L_motor[0].position;
-	ArmData.J2.position = joint_L_motor[1].position;
-	ArmData.J3.position = joint_L_motor[2].position;
-	ArmData.J4.position = joint_L_motor[3].position;
-	ArmData.J5.position = joint_L_motor[4].position;
-	ArmData.J6.position = joint_L_motor[5].position;
-	ArmData.Grip.position = joint_L_motor[6].position;
+	ArmData.J1.position = joint_L_motor[0].position + ArmControl_Offset(0);
+	ArmData.J2.position = joint_L_motor[1].position + ArmControl_Offset(1);
+	ArmData.J3.position = joint_L_motor[2].position + ArmControl_Offset(2);
+	ArmData.J4.position = joint_L_motor[3].position + ArmControl_Offset(3);
+	ArmData.J5.position = joint_L_motor[4].position + ArmControl_Offset(4);
+	ArmData.J6.position = joint_L_motor[5].position + ArmControl_Offset(5);
+	ArmData.Grip.position = joint_L_motor[6].position + ArmControl_Offset(6);
 }
 
 /************************* Ä£Ê½ï¿½Ğ¶ï¿½ *************************/
 uint8_t GetArmMode(void)
 {
-    uint8_t mode = 0;
-
-    // ï¿½Ğ¶Ï¾ï¿½ï¿½ï¿½Ä£Ê½
-	if(switch_is_up(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 1
-	{
-			mode = TAKE_WATER;
-	}
-	else if (switch_is_down(RCData.rc.s[RC_Right])&&switch_is_mid(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 0
-	{
-			mode = grip_homing;
-	}
-//	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_mid(RCData.rc.s[RC_Left]))  //RC_contorl.RC->rc.shutter == 1  //switch_is_up(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left])
-//	{
-//			mode = ARM_RESET;
-//	}
-//	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_down(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
-//	{
-//			mode = PASS_WATER;/*ï¿½Ø¹ï¿½ï¿½Ê¼ï¿½ï¿½Ì¬*/
-//	}
-		else if (switch_is_down(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
-	{
-			mode = ARM_L_MOVEMENT_J1_J4;/*ï¿½Ø¹ï¿½ï¿½Ê¼ï¿½ï¿½Ì¬*/
-	}
-
-	
-//	else if (left_button_press_count % 2 == 0&&right_button_press_count % 2 == 0)  //left_button_press_count % 2 == 0&&right_button_press_count % 2 == 0
-//	{
-//			mode = CHASSIS_MOVEMENT_ARM_KEEP;
-//	}
-//	else if (RC_contorl.RC->rc.shutter == 1)  //RC_contorl.RC->rc.shutter == 1
-//	{
-//			mode = ARM_POWERLESS;
-//	}
-	else if (switch_is_down(RCData.rc.s[RC_Right])&&switch_is_down(RCData.rc.s[RC_Left]))  //RC_contorl.RC->rc.shutter == 1
-	{
-			mode = ARM_POWERLESS;
-	}
-	
-	else
-	{
-			mode = ARM_POWERLESS;
-	}
-    return mode;
+    /* ¼¯ÖĞÖÙ²Ã£¨·½°¸µÚ 4 ½Ú£©£ºÆô¶¯×´Ì¬¡¢¶ÔÆë×éºÏ¡¢
+       Z ¼üËø´æÇëÇóºÍ²¦¸Ë×´Ì¬È«²¿ÔÚ arm_control.c ÖĞ½âÎö£»
+       ÕâÀï²»ÔÊĞíÈÎºÎÂß¼­¸²¸ÇÒÑËø´æµÄÄ£Ê½¡£ */
+    return ArmControl_Mode();
 }
 
 /*************************** Ä£Ê½ ****************************/
@@ -1120,7 +958,7 @@ void Arm_L_Movement_J1_J4(void)
 	ArmData.J6.RC_Sum_Value += channel_2*0.00002;
 	ArmData.Grip.RC_Sum_Value += channel_3*0.0003;
 
-	if(joint_L_motor[1].position < 0.496871948f)
+	if(ArmData.J2.position < 0.496871948f)
 	{
 		limitPosition(&ArmData.J1.RC_Sum_Value,J1_Max_position - ArmData.J1.Initial_Total_position,-0.282964571 - ArmData.J1.Initial_Total_position);
 	}	
@@ -1134,19 +972,19 @@ void Arm_L_Movement_J1_J4(void)
 	J2_set_initial_data = J2_zero_position + ArmData.J2.RC_Sum_Value;
 	J3_set_initial_data = J3_zero_position + ArmData.J3.RC_Sum_Value;
 	J4_set_initial_data = J4_zero_position + ArmData.J4.RC_Sum_Value;
-	J5_set_initial_data = J5_zero_position + ArmData.J5.RC_Sum_Value + Custom_RC[4].DM_CC_receive;
-	J6_set_initial_data = J6_zero_position + ArmData.J6.RC_Sum_Value + Custom_RC[5].DM_CC_receive;
+	J5_set_initial_data = J5_zero_position + ArmData.J5.RC_Sum_Value;
+	J6_set_initial_data = J6_zero_position + ArmData.J6.RC_Sum_Value;
 	Grip_set_initial_data = grip_zero_position + ArmData.Grip.RC_Sum_Value;
 
 	J1_send_set = J1_zero_position + ArmData.J1.RC_Sum_Value;    //J1_zero_position + ArmData.J1.RC_Sum_Value + Custom_RC[0].DM_CC_receive + ArmData.J1.Key_Control_Value;//ï¿½ï¿½nï¿½ï¿½ï¿½Ø½Úµï¿½ï¿½ï¿½ï¿½Ê¼Î»ï¿½ï¿½+Ò£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½+ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	J2_send_set = J2_zero_position + ArmData.J2.RC_Sum_Value;
 	J3_send_set = J3_zero_position + ArmData.J3.RC_Sum_Value;
 	J4_send_set = J4_zero_position + ArmData.J4.RC_Sum_Value;
-	J5_send_set = J5_zero_position + ArmData.J5.RC_Sum_Value + Custom_RC[4].DM_CC_receive + ArmData.J5.Key_Control_Value;
-	J6_send_set = J6_zero_position + ArmData.J6.RC_Sum_Value + Custom_RC[5].DM_CC_receive + ArmData.J6.Key_Control_Value;
+	J5_send_set = J5_zero_position + ArmData.J5.RC_Sum_Value + ArmData.J5.Key_Control_Value;
+	J6_send_set = J6_zero_position + ArmData.J6.RC_Sum_Value + ArmData.J6.Key_Control_Value;
 	Grip_send_set = grip_zero_position + ArmData.Grip.RC_Sum_Value + ArmData.Grip.Key_Control_Value;
 	
-	if(joint_L_motor[1].position < 0.496871948f)
+	if(ArmData.J2.position < 0.496871948f)
 	{
 		limitPosition(&J1_send_set,J1_Max_position,-0.282964571);
 	}	
@@ -1190,7 +1028,7 @@ void Arm_L_Movement_J1_J4(void)
 //				J5_send_set = R_J5_get_position_1;
 //				J6_send_set = R_J6_get_position_1;
 //				Grip_send_set =R_Grip_get_position_1;	
-	if(joint_L_motor[1].position < 0.496871948f)
+	if(ArmData.J2.position < 0.496871948f)
 	{
 		limitPosition(&ArmData.J1.send_set,J1_Max_position,-0.17605114);
 	}	

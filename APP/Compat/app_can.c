@@ -6,21 +6,28 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include <string.h>
+#include "arm_output.h"
+#include "arm_input.h"
+#include "master_link.h"
 
-/* Joint feedback and board data live here so the APP sources stay unchanged.
- * joint_L_motor itself is defined by Arm_L_task.c (as in S27_ARM_H7). */
+/* 关节反馈和影子板数据都放在这里，APP 层源码无需改动。
+ * joint_L_motor 本身由 Arm_L_task.c 定义（与 S27_ARM_H7 一致）。 */
 Rcdata_t              RCData;
 A_board_CC_data_t     CC_data;
 
-/* Dual-board CAN data is decoded into this shadow buffer. RCData itself is
- * selected in APP_RC_Task: DT7 has priority, this buffer is the backup. */
+/* 影子板的 CAN 数据解码到这份影子缓冲区；RCData 在 APP_RC_Task 中选择：
+ * DT7 优先，这份缓冲是备份。 */
 static Rcdata_t       app_board_rc_data;
 
-/* Last time a dual-board frame was received (0 = never). */
-static uint32_t app_board_last_tick = 0;
+/* 影子板两个分帧各自的时间戳与序号（0 表示从未收到）。 */
+static uint32_t app_board_switch_tick,app_board_key_tick;
+static uint32_t app_board_switch_seq,app_board_key_seq;
+volatile uint32_t arm_dt7_tick,arm_dt7_seq;
+static ArmInputSnapshot arm_input;
 
-/* The old can_bsp.h provided this as a static inline helper in every TU.
- * One global definition replaces that; DM_motor.c and app_can.c both use it. */
+
+/* 旧版 can_bsp.h 在每个编译单元里提供这个内联函数；
+ * 这里改成一个全局定义，DM_motor.c 与 app_can.c 共用。 */
 float uint_to_float(int x_int, float x_min, float x_max, int bits)
 {
     float span   = x_max - x_min;
@@ -28,24 +35,26 @@ float uint_to_float(int x_int, float x_min, float x_max, int bits)
     return ((float)x_int) * span / ((float)((1 << bits) - 1)) + offset;
 }
 
-/* DT7 is considered online while the template's remote monitor keeps its
- * online counter above the same threshold used by Remote_Message_Moniter(). */
+/* 只要模板的遥控监测器把在线计数保持在 Remote_Message_Moniter() 使用的
+ * 同一阈值以上，就认为 DT7 在线。 */
 static bool APP_Remote_IsOnline(void)
 {
     return (!remote_ctrl.rc_lost) && (remote_ctrl.online_cnt > 0x32U);
 }
 
-/* Dual-board link is considered online for 100 ms after its last CAN frame. */
+/* 影子板链路上次收到 CAN 帧后 100 ms 内视为在线。 */
 static bool APP_Board_IsOnline(void)
 {
-    return (app_board_last_tick != 0U) &&
-           ((HAL_GetTick() - app_board_last_tick) < 100U);
+    uint32_t now=HAL_GetTick();
+    return app_board_switch_seq && app_board_key_seq &&
+        (uint32_t)(now-app_board_switch_tick)<100 &&
+        (uint32_t)(now-app_board_key_tick)<100;
 }
 
-/* Copy the decoded DT7 data into the APP's Rcdata_t view. */
+/* 把解码好的 DT7 数据复制到 APP 的 Rcdata_t 视图。 */
 static void APP_CopyRemoteToRCData(void)
 {
-    /* Keep the snapshot consistent with Remote_Message_Moniter()/SBUS ISR. */
+    /* 与 Remote_Message_Moniter()/SBUS 中断看到的快照保持一致。 */
     taskENTER_CRITICAL();
 
     RCData.rc.ch[0] = remote_ctrl.rc.ch[0];
@@ -53,8 +62,8 @@ static void APP_CopyRemoteToRCData(void)
     RCData.rc.ch[2] = remote_ctrl.rc.ch[2];
     RCData.rc.ch[3] = remote_ctrl.rc.ch[3];
     RCData.rc.ch[4] = remote_ctrl.rc.ch[4];
-    /* remote_ctrl and Rcdata_t share the same convention:
-     * [0] = right switch, [1] = left switch. */
+    /* remote_ctrl 与 Rcdata_t 采用同一约定：
+     * [0] = 右拨杆，[1] = 左拨杆。 */
     RCData.rc.s[0]  = (char)remote_ctrl.rc.s[0];
     RCData.rc.s[1]  = (char)remote_ctrl.rc.s[1];
     RCData.mouse.x  = remote_ctrl.mouse.x;
@@ -89,7 +98,7 @@ static FDCAN_TxFrame_TypeDef *APP_GetTxFrame(FDCAN_HandleTypeDef *hcan)
     return NULL;
 }
 
-/* HAL DLC encoding: for 0..8 bytes the DLC value equals the byte count. */
+/* HAL 的 DLC 编码：0..8 字节时 DLC 值就等于字节数。 */
 static uint32_t APP_DlcFromLen(uint32_t len)
 {
     if (len <= 8U)
@@ -128,8 +137,8 @@ void canx_send_data(FDCAN_HandleTypeDef *hcan, uint16_t id,
         len = 8U;
     }
 
-    /* The template TxFrame objects are shared by the APP tasks; keep the
-     * header/data update and the HAL push in one short critical section. */
+    /* 模板的 TxFrame 对象被多个 APP 任务共用；
+     * 把头部/数据更新和 HAL 入队放在同一个短临界区里。 */
     taskENTER_CRITICAL();
 
     frame->Header.Identifier          = id;
@@ -156,6 +165,7 @@ static void APP_DecodeJoint(uint8_t joint, const uint8_t *data)
     {
         return;
     }
+    if ((data[0]&0x0FU)!=(joint+1U)) return;
     motor = &joint_L_motor[joint];
 
     motor->motorid  = (uint32_t)(data[0] & 0x0FU);
@@ -165,6 +175,7 @@ static void APP_DecodeJoint(uint8_t joint, const uint8_t *data)
     motor->position = uint_to_float(motor->p_int, P_MIN, P_MAX, 16);
     motor->velocity = uint_to_float(motor->v_int, V_MIN, V_MAX, 12);
     motor->torque   = uint_to_float(motor->t_int, T_MIN, T_MAX, 12);
+    ArmOutput_Feedback(joint,motor->position,data[0]>>4,HAL_GetTick());
 }
 
 /*
@@ -180,7 +191,7 @@ void APP_CAN_RxHandler(FDCAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data)
 
     if (hcan->Instance == FDCAN1)
     {
-        /* Left arm DM motor feedback: IDs 0x01..0x07. */
+        /* 左臂 DM 电机反馈：ID 0x01..0x07。 */
         if ((id >= (uint32_t)CAN_DM_L_J1_ID) && (id <= (uint32_t)CAN_DM_L_GRIP_ID))
         {
             APP_DecodeJoint((uint8_t)(id - 1U), data);
@@ -188,7 +199,7 @@ void APP_CAN_RxHandler(FDCAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data)
     }
     else if (hcan->Instance == FDCAN2)
     {
-        /* Dual-board remote data, same layout as S27_ARM_H7 can_bsp.c. */
+        /* 影子板遥控数据，布局与 S27_ARM_H7 的 can_bsp.c 相同。 */
         if (id == (uint32_t)CAN_Board_ID_1)
         {
             app_board_rc_data.rc.ch[0] = (int16_t)((uint16_t)data[0] << 8 | data[1]);
@@ -196,7 +207,7 @@ void APP_CAN_RxHandler(FDCAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data)
             app_board_rc_data.rc.ch[2] = (int16_t)((uint16_t)data[4] << 8 | data[5]);
             app_board_rc_data.rc.s[1]  = (char)data[6];
             app_board_rc_data.rc.s[0]  = (char)data[7];
-            app_board_last_tick = HAL_GetTick();
+            app_board_switch_tick = HAL_GetTick(); app_board_switch_seq++;
         }
         else if (id == (uint32_t)CAN_Board_ID_2)
         {
@@ -205,7 +216,7 @@ void APP_CAN_RxHandler(FDCAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data)
             app_board_rc_data.key.v         = (uint16_t)((uint16_t)data[2] << 8 | data[3]);
             app_board_rc_data.rc.ch[3]      = (int16_t)((uint16_t)data[4] << 8 | data[5]);
             app_board_rc_data.mouse.x       = (int16_t)((uint16_t)data[6] << 8 | data[7]);
-            app_board_last_tick            = HAL_GetTick();
+            app_board_key_tick = HAL_GetTick(); app_board_key_seq++;
         }
         else if (id == (uint32_t)CAN_Board__float_ID_1)
         {
@@ -241,24 +252,38 @@ void APP_CAN_RxHandler(FDCAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data)
  */
 void APP_RC_Fallback(void)
 {
-#if APP_RC_FALLBACK_ENABLE
-    if (APP_Remote_IsOnline())
-    {
+    ImageKeyboardSnapshot image_keyboard;
+    bool image_key_ok;
+    uint32_t p=__get_PRIMASK(); __disable_irq();
+    memset(&arm_input,0,sizeof(arm_input));
+    /* 图传键盘是一条明确的替代来源，绝不与本地键盘按位或合并；
+       它有自己的时间戳和自己的序号。 */
+    image_key_ok=ImageKeyboard_Read(&image_keyboard) &&
+        (uint32_t)(HAL_GetTick()-image_keyboard.rx_tick)<100;
+    if(APP_Remote_IsOnline() && arm_dt7_seq && (uint32_t)(HAL_GetTick()-arm_dt7_tick)<100) {
         APP_CopyRemoteToRCData();
+        arm_input.source=1; arm_input.switches_tick=arm_dt7_tick;
+        arm_input.keyboard_tick=arm_dt7_tick; arm_input.seq=arm_dt7_seq;
+    } else if(APP_Board_IsOnline()) {
+        memcpy(&RCData,&app_board_rc_data,sizeof(RCData));
+        arm_input.source=2; arm_input.switches_tick=app_board_switch_tick;
+        arm_input.keyboard_tick=app_board_key_tick; arm_input.seq=app_board_switch_seq;
+    } else {
+        memset(&RCData,0,sizeof(RCData));
     }
-    else if (APP_Board_IsOnline())
-    {
-        taskENTER_CRITICAL();
-        memcpy(&RCData, &app_board_rc_data, sizeof(RCData));
-        taskEXIT_CRITICAL();
+    arm_input.s[0]=RCData.rc.s[0]; arm_input.s[1]=RCData.rc.s[1];
+    if(image_key_ok) {
+        arm_input.key=(uint16_t)(image_keyboard.payload[8]|((uint16_t)image_keyboard.payload[9]<<8));
+        arm_input.keyboard_source=3;
+        arm_input.keyboard_tick=image_keyboard.rx_tick;
+        arm_input.seq=image_keyboard.seq;
+    } else {
+        arm_input.key=RCData.key.v;
+        arm_input.keyboard_source=(uint8_t)arm_input.source;
     }
-    else
-    {
-        /* Remote_Message_Moniter() has cleared remote_ctrl, so this also
-         * clears RCData and makes GetArmMode() fall back to ARM_POWERLESS. */
-        APP_CopyRemoteToRCData();
-    }
-#endif
+    arm_input.online=arm_input.source!=0 &&
+        arm_input.s[0]>=1 && arm_input.s[0]<=3 && arm_input.s[1]>=1 && arm_input.s[1]<=3;
+    __set_PRIMASK(p);
 }
 
 void APP_RC_Task(void const *argument)
@@ -270,4 +295,11 @@ void APP_RC_Task(void const *argument)
         APP_RC_Fallback();
         osDelay(10);
     }
+}
+
+void ArmInput_Read(ArmInputSnapshot *out)
+{
+    uint32_t p=__get_PRIMASK(); __disable_irq(); *out=arm_input; __set_PRIMASK(p);
+    if((uint32_t)(HAL_GetTick()-out->switches_tick)>=100 ||
+       (uint32_t)(HAL_GetTick()-out->keyboard_tick)>=100) out->online=false;
 }

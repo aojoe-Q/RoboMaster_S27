@@ -173,6 +173,9 @@ typedef enum
 	ARM_RESET,
 	TAKE_Grip,
 
+	ARM_CUSTOM_CONTROL = 10,
+	ARM_ALIGN = 11,
+
 }Arm_mode_t; 
 
 typedef  struct

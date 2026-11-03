@@ -24,6 +24,7 @@
 #include "cmsis_os.h"
 #include "crc8_crc16.h"
 #include "Arm_L_task.h"
+#include "master_link.h"
 // uint8_t usb_rx_buf[APP_RX_DATA_SIZE];
  uint8_t usb_rx_buf[20];
 // Constants
@@ -50,8 +51,8 @@ void referee_usart_Task(void const * argument)
 //  MX_USB_DEVICE_Init();
   while (1)
   {
-    usb_receive();
-	Custom_RC_data();
+    MasterLink_Poll();
+    /* Ö÷ÊÖÔØºÉÓïÒåÉÐÎ´È·ÈÏ£º²»ÒªÌî³ä Custom_RC¡£ */
 		
     osDelay(10); // Îªï¿½Ë¼ï¿½ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÝµÄ¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í·ï¿½ï¿½ï¿½Æµï¿½Ê¡ï¿½ Delay for 6.67 milliseconds (150Hz)
   }
