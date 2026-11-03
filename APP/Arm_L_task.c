@@ -65,6 +65,7 @@
   RC_contorl_t RC_contorl;
   
   joint_motor_measure_t joint_L_motor[7];
+
   
   
   /*��ʼ��̬*/
@@ -85,7 +86,7 @@
   double J1_ramp=0,J2_ramp=0,J3_ramp=0,J4_ramp=0,J5_ramp=0,J6_ramp=0,Grip_ramp=0;
   
   int i=1;//���ԣ�
-	
+
 void Arm_L_Task(void const * argument)
 {
 	static uint8_t prev_ArmMode = 0xFF;
@@ -112,19 +113,19 @@ void Arm_L_Task(void const * argument)
 
 		switch (ArmData.ArmMode)
         {
-					
-			case TAKE_WATER:
-				TAKE_WATER_1();
+//					
+//			case TAKE_WATER:
+//				TAKE_WATER_1();
+//				break;
+			case grip_homing:
+				grip_homing_1();
 				break;
-			case PASS_WATER:
-				PASS_WATER_1();
-				break;
-			case ARM_RESET:
-				ARM_RESET_1();
-				break;
-			case TAKE_Grip:
-				TAKE_Grip_1();
-			break;
+//			case ARM_RESET:
+//				ARM_RESET_1();
+//				break;
+//			case TAKE_Grip:
+//				TAKE_Grip_1();
+//			break;
 			case ARM_L_MOVEMENT_J1_J4:
 				Arm_L_Movement_J1_J4();
 			break;
@@ -163,9 +164,9 @@ void Arm_L_Init(void)
 	enable_motor_mode(&hfdcan1, 0x05, 0);
 	osDelay(5);
 	enable_motor_mode(&hfdcan1, 0x06, 0);
-	osDelay(5);
+	osDelay(25);
 	enable_motor_mode(&hfdcan1, 0x07, 0);
-	osDelay(5);
+	osDelay(25);
 	
 	
 //	save_motor_zero(&hfdcan1, 0X01, 0);
@@ -178,8 +179,9 @@ void Arm_L_Init(void)
 //	osDelay(5);
 //	save_motor_zero(&hfdcan1, 0X05, 0);
 //	osDelay(5);
-//	save_motor_zero(&hfdcan1, 0X06, 0);
+//	save_motor_zero(&hfdcan1, 0X07, 0);
 //	osDelay(5);
+	
 	//���ֵ��λ��
 	ArmData.J1.send_set=joint_L_motor[0].position;
 	ArmData.J2.send_set=joint_L_motor[1].position;
@@ -330,18 +332,18 @@ uint8_t GetArmMode(void)
 	{
 			mode = TAKE_WATER;
 	}
-	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 0
+	else if (switch_is_down(RCData.rc.s[RC_Right])&&switch_is_mid(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 0
 	{
-			mode = PASS_WATER;
+			mode = grip_homing;
 	}
-	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_mid(RCData.rc.s[RC_Left]))  //RC_contorl.RC->rc.shutter == 1  //switch_is_up(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left])
-	{
-			mode = ARM_RESET;
-	}
-	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_down(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
-	{
-			mode = TAKE_Grip;/*�ع��ʼ��̬*/
-	}
+//	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_mid(RCData.rc.s[RC_Left]))  //RC_contorl.RC->rc.shutter == 1  //switch_is_up(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left])
+//	{
+//			mode = ARM_RESET;
+//	}
+//	else if (switch_is_mid(RCData.rc.s[RC_Right])&&switch_is_down(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
+//	{
+//			mode = PASS_WATER;/*�ع��ʼ��̬*/
+//	}
 		else if (switch_is_down(RCData.rc.s[RC_Right])&&switch_is_up(RCData.rc.s[RC_Left]))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
 	{
 			mode = ARM_L_MOVEMENT_J1_J4;/*�ع��ʼ��̬*/
@@ -472,7 +474,7 @@ void ARM_RESET_1(void)
 
 }
 
-void PASS_WATER_1(void)
+void grip_homing_1(void)
 {
 	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
 	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
@@ -490,7 +492,7 @@ void PASS_WATER_1(void)
 	J6_send_set = J6_TAKE_position;
 	Grip_send_set = Grip_TAKE_position_1;
 
-	J1_ramp= 0.0090,J2_ramp= 0.003,J3_ramp= 0.0045,J4_ramp= 0.0042,J5_ramp= 0.003,J6_ramp= 0.003,Grip_ramp= 0.030;  
+	J1_ramp= 0.0090,J2_ramp= 0.003,J3_ramp= 0.0045,J4_ramp= 0.0042,J5_ramp= 0.003,J6_ramp= 0.003,Grip_ramp= 0.090;  
 
 	
 	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
@@ -501,7 +503,7 @@ void PASS_WATER_1(void)
 	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
 	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
 
-	/*б�º���*/
+	/*斜坡函数*/
 	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
 	arm_ramp_calc(&J2_L_position_set,J2_ramp,J2_send_set);
 	arm_ramp_calc(&J3_L_position_set,J3_ramp,J3_send_set);
@@ -510,7 +512,7 @@ void PASS_WATER_1(void)
 	arm_ramp_calc(&J6_L_position_set,J6_ramp,J6_send_set);
 	arm_ramp_calc(&grip_L_position_set,Grip_ramp,Grip_send_set);
 
-	/*���λ�ø�ֵ*/
+	/*赋值*/
 	ArmData.J1.send_set = J1_L_position_set.out;
 	ArmData.J2.send_set = J2_L_position_set.out;
 	ArmData.J3.send_set = J3_L_position_set.out;
@@ -518,8 +520,6 @@ void PASS_WATER_1(void)
 	ArmData.J5.send_set = J5_L_position_set.out;
 	ArmData.J6.send_set = J6_L_position_set.out;
 	ArmData.Grip.send_set = grip_L_position_set.out;
-
-
 }
 
 void TAKE_WATER_1(void)
@@ -1118,7 +1118,7 @@ void Arm_L_Movement_J1_J4(void)
 	ArmData.J4.RC_Sum_Value += channel_1*0.00002;
 	ArmData.J5.RC_Sum_Value += channel_2*0.00002;
 	ArmData.J6.RC_Sum_Value += channel_2*0.00002;
-	ArmData.Grip.RC_Sum_Value += channel_3*0.00005;
+	ArmData.Grip.RC_Sum_Value += channel_3*0.0003;
 
 	if(joint_L_motor[1].position < 0.496871948f)
 	{
@@ -1181,7 +1181,7 @@ void Arm_L_Movement_J1_J4(void)
 	limitPosition(&ArmData.J4.RC_Sum_Value,J4_Max_position - ArmData.J4.Initial_Total_position - ArmData.J4.Key_Control_Value,J4_Min_position - ArmData.J4.Initial_Total_position - ArmData.J4.Key_Control_Value);
 	limitPosition(&ArmData.J5.RC_Sum_Value,J5_Max_position - ArmData.J5.Initial_Total_position,J5_Min_position - ArmData.J5.Initial_Total_position);
 	limitPosition(&ArmData.J6.RC_Sum_Value,J6_Max_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value,J6_Min_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value);
-	limitPosition(&ArmData.Grip.RC_Sum_Value,J6_Max_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value,J6_Min_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value);
+	limitPosition(&ArmData.Grip.RC_Sum_Value,Grip_Max_position - grip_zero_position - ArmData.Grip.Key_Control_Value,Grip_Min_position - grip_zero_position - ArmData.Grip.Key_Control_Value);
 
 //				J1_send_set = R_J1_get_position_1;
 //				J2_send_set = R_J2_get_position_1;

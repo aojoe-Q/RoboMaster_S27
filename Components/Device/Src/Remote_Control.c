@@ -51,8 +51,8 @@ void SBUS_TO_RC(volatile const uint8_t *sbus_buf, Remote_Info_Typedef  *remote_c
 
     /* Switch right, left: keep the same index convention as Rcdata_t
      * (s[0] = right, s[1] = left). */
-    remote_ctrl->rc.s[0] = ((sbus_buf[5] >> 4) & 0x000C) >> 2;             //!< Switch right
-    remote_ctrl->rc.s[1] = ((sbus_buf[5] >> 4) & 0x0003);                  //!< Switch left
+    remote_ctrl->rc.s[1] = ((sbus_buf[5] >> 4) & 0x000C) >> 2;             //!< Switch right
+    remote_ctrl->rc.s[0] = ((sbus_buf[5] >> 4) & 0x0003);                  //!< Switch left
 
     /* Mouse axis: X, Y, Z */
     remote_ctrl->mouse.x = sbus_buf[6]  | (sbus_buf[7] << 8);                    //!< Mouse X axis
