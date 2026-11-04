@@ -75,6 +75,17 @@ typedef enum
 #ifndef P_MAX
 #define P_MAX   (12.5f)
 #endif
+/* ---- 按轴位置映射范围 (DM 寄存器 0x15 PMAX) ---------- */
+/* 16 位位置字段映射到 [-PMAX, +PMAX]。六个关节仍是出厂值 12.5；                 */
+/* 夹爪（索引 6）的 PMAX 已在电机侧改成 20.0，主机必须同步，否则同一          */
+/* 条指令在电机侧会被解释成 20/12.5 = 1.6 倍的角度。                          */
+#define JOINT_P_MAX_NORMAL   (12.5f)
+#define JOINT_P_MIN_NORMAL   (-12.5f)
+#define JOINT_P_MAX_GRIP     (20.0f)
+#define JOINT_P_MIN_GRIP     (-20.0f)
+
+extern const float Joint_P_MAX[7];
+extern const float Joint_P_MIN[7];
 #ifndef V_MIN
 #define V_MIN   (-45.0f)
 #endif
@@ -126,7 +137,17 @@ typedef struct
     float    torque;
     uint32_t update_tick;       /* RTOS tick of the last decoded feedback */
     uint32_t update_count;      /* 0 until the first feedback arrives     */
+    uint8_t  err;               /* DM feedback byte 0 high nibble:
+                                   0 disabled, 1 enabled, >= 8 fault      */
 } joint_motor_measure_t;
+
+/* DM feedback ERR codes from 8 up are faults (over/under voltage, over
+   current, over temperature, lost communication, overload). */
+#define JOINT_ERR_FAULT_MIN     8U
+/* A joint is fresh if it fed back within this time. Same value as
+   ARM_USB_FEEDBACK_TIMEOUT_MS. */
+#define JOINT_FEEDBACK_TIMEOUT_MS 100U
+#define JOINT_ALL_MASK          ((uint8_t)0x7FU)
 
 typedef struct
 {
@@ -171,6 +192,10 @@ extern void canx_send_data(FDCAN_HandleTypeDef *hcan, uint16_t id,
 extern void APP_CAN_RxHandler(FDCAN_HandleTypeDef *hcan, uint32_t id,
                               uint8_t *data);
 extern void APP_RC_Fallback(void);
+/* Bit i set when joint i fed back within JOINT_FEEDBACK_TIMEOUT_MS of
+   now_tick and reports no fault. Call inside a critical section when the
+   result must match other joint fields. */
+extern uint8_t APP_Joint_Fresh_Mask(uint32_t now_tick);
 extern void APP_RC_Task(void const *argument);
 
 /* Provided by DM_motor.c, shared by the old motor modules. */

@@ -160,9 +160,21 @@ typedef struct
   uint16_t       index;
 } unpack_data_t;
 
+/* 主手 0x0302 原始载荷快照：只在图传解析器接受新帧（cmd_id、长度、CRC 均通过）时更新 */
+#define MASTER_RAW_TIMEOUT_MS   200U   /* 超过此时间无新帧视为离线 */
+#define CUSTOM_RC_DECODE_ENABLE 0      /* 发送端协议确认前保持 0：不解码进 Custom_RC */
+typedef struct
+{
+  uint8_t  data[30];
+  uint32_t rx_tick;    /* 帧被接受时的 HAL tick */
+  uint32_t rx_count;   /* 0 = 从未收到 */
+  uint8_t  online;
+} master_raw_t;
+extern master_raw_t Master_Raw;
+
 extern uint8_t Custom_RC_Key1;
 extern uint8_t Custom_RC_Key2;
-void Custom_RC_data(void);
+void Custom_RC_data(const uint8_t *data);
 extern void referee_unpack_fifo_data(void);
 void init_referee_struct_data(void);
 void referee_data_solve(uint8_t *frame);

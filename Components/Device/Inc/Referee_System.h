@@ -609,7 +609,7 @@ typedef struct
 /**
  * @brief Referee_RxDMA MultiBuffer
  */
-extern uint8_t Referee_System_Info_MultiRx_Buf[2][REFEREE_RXFRAME_LENGTH];
+extern uint8_t Referee_System_Info_MultiRx_Buf[2][REFEREE_RXFRAME_LENGTH*2];
 /**
  * @brief Referee structure variable
  */

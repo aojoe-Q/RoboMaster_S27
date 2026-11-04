@@ -26,8 +26,8 @@
 #define J5_Min_position -1.29562798f	 
 #define J6_Max_position 2.22337666f		
 #define J6_Min_position -2.25160637f 
-#define Grip_Max_position 0.7f    	 
-#define Grip_Min_position 0.0f		
+#define Grip_Max_position 12.0f    	 
+#define Grip_Min_position -12.0f		
 /*������λ*/
 /* J1/J2 collision zone: while measured J2 is below J1_J2_ZONE_J2_MAX the
    J1 lower limit tightens to J1_J2_ZONE_J1_MIN. RC mode only; PC mode
@@ -225,12 +225,30 @@ typedef struct
 }Custom_controller_t;
 
 
+/* 发给 Moter_Task 的完整一帧命令（逻辑坐标）。Arm_L_Task 在临界区内整帧发布，
+   Moter_Task 整帧读取，不再逐轴拼读 ArmData。 */
+#define ARM_CMD_TIMEOUT_MS   50U     /* 超过此时间未发布的命令无效，输出无力帧 */
+#define ARM_GRIP_TORQUE      0.2f    /* 右上左中夹爪力矩夹取 */
+typedef struct
+{
+	fp32     position[7];    /* J1..J6, Grip 逻辑目标 P_target */
+	fp32     kp[7];
+	fp32     kd[7];
+	fp32     torque[7];
+	uint32_t tick;           /* 发布时的 RTOS tick */
+	uint32_t seq;            /* 0 = 尚未发布 */
+}ArmCommand_t;
+
+extern ArmCommand_t ArmCommand;
+
 extern Custom_controller_t Custom_RC[6];
 extern	ArmData_t ArmData;
 extern volatile uint8_t Arm_L_Ready;
 
 void Arm_L_Task(void const * argument);
 void Arm_L_Init(void);
+void Arm_Command_Publish(void);   /* 整帧发布当前 ArmData 目标 */
+uint8_t Arm_Grip_Torque_Request(void);
 void data_updata(void);
 uint8_t GetArmMode(void);
 

@@ -33,10 +33,16 @@ static void usb_receive(void);
 unpack_data_t referee_unpack_obj;
 #define USB_RECEIVE_LEN 384
 extern int8_t CDC_Receive_HS(uint8_t* pbuf, uint32_t *Len);
+/* 主手 0x0302 真实来源：USART1 图传解析器（Image_Transmission.c）。
+   不直接 include Image_Transmission.h：其 custom_robot_data_t 与
+   CUSTOM_ROBOT_DATA_ID 宏和本模块同名定义冲突。 */
+extern uint32_t Image_Transmission_Get_Custom(uint8_t data[30], uint32_t *rx_tick);
+static void Master_Raw_Update(void);
 
 robot_status_t robot_state;	
 custom_robot_data_t custom_robot_data;											/*0X0302*/
 Custom_controller_t Custom_RC[6];
+master_raw_t Master_Raw;													/*0X0302 原始快照*/
 uint8_t Custom_RC_Key1;
 uint8_t Custom_RC_Key2;
 /**
@@ -50,8 +56,8 @@ void referee_usart_Task(void const * argument)
 //  MX_USB_DEVICE_Init();
   while (1)
   {
-    usb_receive();
-	Custom_RC_data();
+    (void)usb_receive;  /* 读取的 uart1_rx_process_buf 无写入者（全零占位），已停用 */
+	Master_Raw_Update();
 		
     osDelay(10); // Ϊ�˼�����λ���������ݵĸ��������ͷ���Ƶ�ʡ� Delay for 6.67 milliseconds (150Hz)
   }
@@ -371,27 +377,52 @@ bool verify_crc16_check_sum(const uint8_t *data, uint32_t length)
     return (calculated_crc == received_crc);
 }
 
-void Custom_RC_data(void)
+/* 从图传链路取最新一帧 0x0302 原始载荷。只在接收计数变化时更新；
+   字段语义未确认前（CUSTOM_RC_DECODE_ENABLE=0）不解码进 Custom_RC。 */
+static void Master_Raw_Update(void)
+{
+	uint8_t  data[30];
+	uint32_t tick = 0;
+	uint32_t count = Image_Transmission_Get_Custom(data, &tick);
+
+	if (count != 0U && count != Master_Raw.rx_count)
+	{
+		taskENTER_CRITICAL();
+		memcpy(Master_Raw.data, data, sizeof(Master_Raw.data));
+		Master_Raw.rx_tick  = tick;
+		Master_Raw.rx_count = count;
+		taskEXIT_CRITICAL();
+#if CUSTOM_RC_DECODE_ENABLE
+		Custom_RC_data(Master_Raw.data);
+#endif
+	}
+	Master_Raw.online = (uint8_t)((Master_Raw.rx_count != 0U) &&
+	                              ((HAL_GetTick() - Master_Raw.rx_tick) < MASTER_RAW_TIMEOUT_MS));
+}
+
+/* 按旧 APP 期望格式解码一帧载荷（4 个大端 float、2 个大端 int32、2 个按键字节）。
+   该格式尚未用发送端源码或抓包确认。 */
+void Custom_RC_data(const uint8_t *data)
 {
 	// �����յ����ֽ�����ת��Ϊ������
-		Custom_RC[0].DM_CC_receive = bytes_to_float(custom_robot_data.data[0], custom_robot_data.data[1], custom_robot_data.data[2], custom_robot_data.data[3]);
-		Custom_RC[1].DM_CC_receive = bytes_to_float(custom_robot_data.data[4], custom_robot_data.data[5], custom_robot_data.data[6], custom_robot_data.data[7]);
-		Custom_RC[2].DM_CC_receive = bytes_to_float(custom_robot_data.data[8], custom_robot_data.data[9], custom_robot_data.data[10], custom_robot_data.data[11]);
-		Custom_RC[3].DM_CC_receive = bytes_to_float(custom_robot_data.data[12], custom_robot_data.data[13], custom_robot_data.data[14], custom_robot_data.data[15]);
+		Custom_RC[0].DM_CC_receive = bytes_to_float(data[0], data[1], data[2], data[3]);
+		Custom_RC[1].DM_CC_receive = bytes_to_float(data[4], data[5], data[6], data[7]);
+		Custom_RC[2].DM_CC_receive = bytes_to_float(data[8], data[9], data[10], data[11]);
+		Custom_RC[3].DM_CC_receive = bytes_to_float(data[12], data[13], data[14], data[15]);
 		// ���ֽ������е�����ת��Ϊ int32_t
-		Custom_RC[4].DJ_CC_receive = (int32_t)(custom_robot_data.data[16] << 24) | 
-																 (custom_robot_data.data[17] << 16) | 
-																 (custom_robot_data.data[18] << 8) | 
-																 custom_robot_data.data[19];
+		Custom_RC[4].DJ_CC_receive = (int32_t)(((uint32_t)data[16] << 24) | 
+																 ((uint32_t)data[17] << 16) | 
+																 ((uint32_t)data[18] << 8) | 
+																 (uint32_t)data[19]);
 
 		// ͬ��������һ�� 32 λ���ݴ��ֽ������н���
-		Custom_RC[5].DJ_CC_receive = (int32_t)(custom_robot_data.data[20] << 24) | 
-																 (custom_robot_data.data[21] << 16) | 
-																 (custom_robot_data.data[22] << 8) | 
-																 custom_robot_data.data[23];
+		Custom_RC[5].DJ_CC_receive = (int32_t)(((uint32_t)data[20] << 24) | 
+																 ((uint32_t)data[21] << 16) | 
+																 ((uint32_t)data[22] << 8) | 
+																 (uint32_t)data[23]);
 	
-		Custom_RC_Key1 = custom_robot_data.data[24];
-		Custom_RC_Key2 = custom_robot_data.data[25];
+		Custom_RC_Key1 = data[24];
+		Custom_RC_Key2 = data[25];
 }
 
 

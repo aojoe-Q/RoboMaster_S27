@@ -52,3 +52,5 @@ __pycache__/
 _backup_*/
 _archived_*/
 tools/selftest/build/
+# Effective scatter file (umfTarg=0): keeps Sector 6/7 out of the image
+!/MDK-ARM/COD_H7_Template/COD_H7_Template.sct

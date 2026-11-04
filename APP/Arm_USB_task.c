@@ -10,6 +10,7 @@
 #include "MiniPC.h"
 #include "Arm_L_task.h"
 #include "can_bsp.h"
+#include "multi_turn_restore.h"
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -184,7 +185,10 @@ static uint8_t handle_position_cmd(const ArmFrameHeader_t *hdr, const uint8_t *p
     for (uint8_t i = 0; i < ARM_PROTO_JOINT_NUM; i++)
     {
         target[i] = arm_proto_urad_to_rad(cmd.position_urad[i]);
-        if (target[i] > joint_max[i] || target[i] < joint_min[i])
+        /* PC 目标是逻辑坐标 P = p + b，joint_min/max 是 raw 物理限位，
+           先减 b 再比。 */
+        if ((target[i] - Joint_Boot_Offset[i]) > joint_max[i] ||
+            (target[i] - Joint_Boot_Offset[i]) < joint_min[i])
         {
             return ARM_ACK_OUT_OF_RANGE;
         }
@@ -598,7 +602,9 @@ static void fill_state(ArmStatePayload_t *s, uint32_t now_ms)
     mask  = feedback_mask_locked(now_ms, s->feedback_age_ms);
     for (uint8_t i = 0; i < ARM_PROTO_JOINT_NUM; i++)
     {
-        pos[i] = joint_L_motor[i].position;
+        /* Logical position P = p + b: same coordinates as the PC targets
+           and the joint limits. */
+        pos[i] = joint_L_motor[i].position + Joint_Boot_Offset[i];
         vel[i] = joint_L_motor[i].velocity;
         tor[i] = joint_L_motor[i].torque;
         set[i] = joint[i]->send_set;

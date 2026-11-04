@@ -10,7 +10,49 @@
 #include "DT7_DR16.h"
 #include "LK_motor.h"
 #include "referee_usart_task.h"
+#include "multi_turn_store.h"
+#include "multi_turn_restore.h"
 #include "math.h"
+/* ---- Âß¼­×ø±ê²Î¿¼µã£ºraw ±ê¶¨³£Á¿ + ±¾ÖáÉÏµçÆ«ÒÆ b ---- */
+/* b = Joint_Boot_Offset[i] °Ñµç»úÉÏµçºóµÄ raw Î»ÖÃ»¹Ô­³ÉÂß¼­×ø±ê£¬
+   ËùÒÔÁãµã/ÏŞÎ»/Ê¾½ÌµãÕâĞ©¡°ÔÚ raw ÏÂÁ¿³öÀ´µÄ³£Á¿¡±ÔÚ¿ØÖÆ²ã¶¼Òª +b¡£ */
+#define J1_zero_L    (J1_zero_position    + Joint_Boot_Offset[0])
+#define J1_max_L     (J1_Max_position     + Joint_Boot_Offset[0])
+#define J1_min_L     (J1_Min_position     + Joint_Boot_Offset[0])
+#define J1_reset_L   (J1_reset_position   + Joint_Boot_Offset[0])
+#define J1_take_L    (J1_TAKE_position    + Joint_Boot_Offset[0])
+#define J2_zero_L    (J2_zero_position    + Joint_Boot_Offset[1])
+#define J2_max_L     (J2_Max_position     + Joint_Boot_Offset[1])
+#define J2_min_L     (J2_Min_position     + Joint_Boot_Offset[1])
+#define J2_reset_L   (J2_reset_position   + Joint_Boot_Offset[1])
+#define J2_take_L    (J2_TAKE_position    + Joint_Boot_Offset[1])
+#define J3_zero_L    (J3_zero_position    + Joint_Boot_Offset[2])
+#define J3_max_L     (J3_Max_position     + Joint_Boot_Offset[2])
+#define J3_min_L     (J3_Min_position     + Joint_Boot_Offset[2])
+#define J3_reset_L   (J3_reset_position   + Joint_Boot_Offset[2])
+#define J3_take_L    (J3_TAKE_position    + Joint_Boot_Offset[2])
+#define J4_zero_L    (J4_zero_position    + Joint_Boot_Offset[3])
+#define J4_max_L     (J4_Max_position     + Joint_Boot_Offset[3])
+#define J4_min_L     (J4_Min_position     + Joint_Boot_Offset[3])
+#define J4_reset_L   (J4_reset_position   + Joint_Boot_Offset[3])
+#define J4_take_L    (J4_TAKE_position    + Joint_Boot_Offset[3])
+#define J5_zero_L    (J5_zero_position    + Joint_Boot_Offset[4])
+#define J5_max_L     (J5_Max_position     + Joint_Boot_Offset[4])
+#define J5_min_L     (J5_Min_position     + Joint_Boot_Offset[4])
+#define J5_reset_L   (J5_reset_position   + Joint_Boot_Offset[4])
+#define J5_take_L    (J5_TAKE_position    + Joint_Boot_Offset[4])
+#define J6_zero_L    (J6_zero_position    + Joint_Boot_Offset[5])
+#define J6_max_L     (J6_Max_position     + Joint_Boot_Offset[5])
+#define J6_min_L     (J6_Min_position     + Joint_Boot_Offset[5])
+#define J6_reset_L   (J6_reset_position   + Joint_Boot_Offset[5])
+#define J6_take_L    (J6_TAKE_position    + Joint_Boot_Offset[5])
+#define grip_zero_L  (grip_zero_position  + Joint_Boot_Offset[6])
+#define Grip_max_L   (Grip_Max_position   + Joint_Boot_Offset[6])
+#define Grip_min_L   (Grip_Min_position   + Joint_Boot_Offset[6])
+#define Grip_take_L  (Grip_TAKE_position_1 + Joint_Boot_Offset[6])
+#define J1_zone_L    (J1_J2_ZONE_J1_MIN   + Joint_Boot_Offset[0])
+#define J2_zone_L    (J1_J2_ZONE_J2_MAX   + Joint_Boot_Offset[1])
+
 /**
  * @brief ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Åºï¿½Ó¦ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÆµÄºê¶¨ï¿½å¡£
  *
@@ -64,6 +106,7 @@
   ButtonCounter right_button_btn;
   ArmData_t ArmData;
   volatile uint8_t Arm_L_Ready = 0;  /* set when Arm_L_Init() has finished */
+  ArmCommand_t ArmCommand;           /* å‘ç»™ Moter_Task çš„æ•´å¸§å‘½ä»¤ï¼ˆé€»è¾‘åæ ‡ï¼‰ */
   RC_contorl_t RC_contorl;
   
   joint_motor_measure_t joint_L_motor[7];
@@ -101,17 +144,30 @@ void Arm_L_Task(void const * argument)
 		{
 			if (ArmData.ArmMode == ARM_L_MOVEMENT_J1_J4)
 			{
-				ArmData.J1.RC_Sum_Value = ArmData.J1.position - J1_zero_position;
-				ArmData.J2.RC_Sum_Value = ArmData.J2.position - J2_zero_position;
-				ArmData.J3.RC_Sum_Value = ArmData.J3.position - J3_zero_position;
-				ArmData.J4.RC_Sum_Value = ArmData.J4.position - J4_zero_position;
-				ArmData.J5.RC_Sum_Value = ArmData.J5.position - J5_zero_position - Custom_RC[4].DM_CC_receive - ArmData.J5.Key_Control_Value;
-				ArmData.J6.RC_Sum_Value = ArmData.J6.position - J6_zero_position - Custom_RC[5].DM_CC_receive - ArmData.J6.Key_Control_Value;
-				ArmData.Grip.RC_Sum_Value = ArmData.Grip.position - grip_zero_position;
+				ArmData.J1.RC_Sum_Value = ArmData.J1.position - J1_zero_L;
+				ArmData.J2.RC_Sum_Value = ArmData.J2.position - J2_zero_L;
+				ArmData.J3.RC_Sum_Value = ArmData.J3.position - J3_zero_L;
+				ArmData.J4.RC_Sum_Value = ArmData.J4.position - J4_zero_L;
+				ArmData.J5.RC_Sum_Value = ArmData.J5.position - J5_zero_L - Custom_RC[4].DM_CC_receive - ArmData.J5.Key_Control_Value;
+				ArmData.J6.RC_Sum_Value = ArmData.J6.position - J6_zero_L - Custom_RC[5].DM_CC_receive - ArmData.J6.Key_Control_Value;
+				ArmData.Grip.RC_Sum_Value = ArmData.Grip.position - grip_zero_L;
+				/* ¼Ğ×¦Ğ±ÆÂ´Ó½øÈëÊ±µÄÊµ¼ÊÎ»ÖÃÆğËã£¬±ÜÃâµÚÒ»Ö¡´Ó¾ÉÄ¿±êÆğÌø */
+				grip_L_position_set.out = ArmData.Grip.position;
 			}
 			else if (ArmData.ArmMode == ARM_MODE_PC_CONTROL)
 			{
 				Arm_PC_Control_Enter();
+			}
+			else if (ArmData.ArmMode == ARM_RETURN_INITIAL_POSTURE)
+			{
+				/* ¸´Î»Ä£Ê½£¨·Ç×èÈû£©£ºĞ±ÆÂ¶ÔÆëµ½µ±Ç°Êµ¼ÊÎ»ÖÃ£¬Ö®ºóÃ¿ÖÜÆÚÏòÁãµã×ßÒ»²½ */
+				J1_L_position_set.out = ArmData.J1.position;
+				J2_L_position_set.out = ArmData.J2.position;
+				J3_L_position_set.out = ArmData.J3.position;
+				J4_L_position_set.out = ArmData.J4.position;
+				J5_L_position_set.out = ArmData.J5.position;
+				J6_L_position_set.out = ArmData.J6.position;
+				grip_L_position_set.out = ArmData.Grip.position;
 			}
 			/* Leaving PC mode (or never in it): an enable from before the
 			   switch must not move the arm when it comes back. */
@@ -144,6 +200,13 @@ void Arm_L_Task(void const * argument)
 				Arm_PC_Control();
 			break;
 
+			case ARM_RETURN_INITIAL_POSTURE:
+				Arm_return_initial_position();
+			break;
+			case ARM_L_MOVEMENT_J5_GRIP:
+				/* ¸ÃÄ£Ê½ÉĞÎ´ÊµÏÖ£º±£³ÖÎŞÁ¦£¬±ÜÃâÎó¶¯×÷ */
+				Arm_Powerless();
+			break;
 			case ARM_POWERLESS:
 				Arm_Powerless();
 			break;
@@ -152,6 +215,9 @@ void Arm_L_Task(void const * argument)
 				Arm_Powerless();
             break;
         }
+		Arm_Command_Publish();
+		/* µôµç±£³Ö£ºÈÎÒâÄ£Ê½ÏÂ¾²Ö¹¼´¼ÇÂ¼Âß¼­Î»ÖÃ£¨¾²Ö¹/·ù¶È/¼ä¸ôÓÉ MT_Restore_Process ÄÚ²¿ÅĞ¶¨£©£¬¼Ğ×¦ÓĞÍâÁ¦¾ØÊ±²»´æ */
+		MT_Restore_Process((uint8_t)(Arm_L_Ready && !Arm_Grip_Torque_Request()));
 		osDelay(8);
 		
 	}
@@ -165,6 +231,8 @@ void Arm_L_Init(void)
 	osDelay(950);
 	button_init(&left_button_btn);
 	button_init(&right_button_btn);
+	/* æ‰ç”µä¿æŒæ—¥å¿—ï¼šæ‰«æä¸æ¢åŒºæ“¦é™¤å¿…é¡»åœ¨ç”µæœºä½¿èƒ½ä¹‹å‰å®Œæˆ */
+	MT_Store_Boot_Maintenance();
 	
 	/*ï¿½Ø½Úµï¿½ï¿½Ê¹ï¿½ï¿½*/
 	osDelay(15);
@@ -182,6 +250,8 @@ void Arm_L_Init(void)
 	osDelay(5);
 	enable_motor_mode(&hfdcan1, 0x07, 0);
 	osDelay(5);
+	/* ç­‰å¾… 7 è½´åé¦ˆå¹¶è®¡ç®—é€»è¾‘åæ ‡åç§» bï¼ˆMT_RESTORE_ENABLE=0 æ—¶ b=0ï¼‰ */
+	MT_Restore_Boot();
 	
 	
 //	save_motor_zero(&hfdcan1, 0X01, 0);
@@ -196,30 +266,33 @@ void Arm_L_Init(void)
 //	osDelay(5);
 //	save_motor_zero(&hfdcan1, 0X06, 0);
 //	osDelay(5);
-	//ï¿½ï¿½ï¿½Öµï¿½ï¿½Î»ï¿½ï¿½
-	ArmData.J1.send_set=joint_L_motor[0].position;
-	ArmData.J2.send_set=joint_L_motor[1].position;
-	ArmData.J3.send_set=joint_L_motor[2].position;
-	ArmData.J4.send_set=joint_L_motor[3].position;
-	ArmData.J5.send_set=joint_L_motor[4].position;
-	ArmData.J6.send_set=joint_L_motor[5].position;
-	ArmData.Grip.send_set=joint_L_motor[6].position;
-	vTaskDelay(3600);
-	ArmData.J1.position=joint_L_motor[0].position;
-	ArmData.J2.position=joint_L_motor[1].position;
-	ArmData.J3.position=joint_L_motor[2].position;
-	ArmData.J4.position=joint_L_motor[3].position;
-	ArmData.J5.position=joint_L_motor[4].position;
-	ArmData.J6.position=joint_L_motor[5].position;
-	ArmData.Grip.position=joint_L_motor[6].position;
+//	save_motor_zero(&hfdcan1, 0X07, 0);
+//	osDelay(5);
 
-	ArmData.J1.send_set=joint_L_motor[0].position;
-	ArmData.J2.send_set=joint_L_motor[1].position;
-	ArmData.J3.send_set=joint_L_motor[2].position;
-	ArmData.J4.send_set=joint_L_motor[3].position;
-	ArmData.J5.send_set=joint_L_motor[4].position;
-	ArmData.J6.send_set=joint_L_motor[5].position;
-	ArmData.Grip.send_set=joint_L_motor[6].position;
+	//ï¿½ï¿½ï¿½Öµï¿½ï¿½Î»ï¿½ï¿½
+	ArmData.J1.send_set=JOINT_LOGICAL_POSITION(0);
+	ArmData.J2.send_set=JOINT_LOGICAL_POSITION(1);
+	ArmData.J3.send_set=JOINT_LOGICAL_POSITION(2);
+	ArmData.J4.send_set=JOINT_LOGICAL_POSITION(3);
+	ArmData.J5.send_set=JOINT_LOGICAL_POSITION(4);
+	ArmData.J6.send_set=JOINT_LOGICAL_POSITION(5);
+	ArmData.Grip.send_set=JOINT_LOGICAL_POSITION(6);
+	vTaskDelay(3600);
+	ArmData.J1.position=JOINT_LOGICAL_POSITION(0);
+	ArmData.J2.position=JOINT_LOGICAL_POSITION(1);
+	ArmData.J3.position=JOINT_LOGICAL_POSITION(2);
+	ArmData.J4.position=JOINT_LOGICAL_POSITION(3);
+	ArmData.J5.position=JOINT_LOGICAL_POSITION(4);
+	ArmData.J6.position=JOINT_LOGICAL_POSITION(5);
+	ArmData.Grip.position=JOINT_LOGICAL_POSITION(6);
+
+	ArmData.J1.send_set=JOINT_LOGICAL_POSITION(0);
+	ArmData.J2.send_set=JOINT_LOGICAL_POSITION(1);
+	ArmData.J3.send_set=JOINT_LOGICAL_POSITION(2);
+	ArmData.J4.send_set=JOINT_LOGICAL_POSITION(3);
+	ArmData.J5.send_set=JOINT_LOGICAL_POSITION(4);
+	ArmData.J6.send_set=JOINT_LOGICAL_POSITION(5);
+	ArmData.Grip.send_set=JOINT_LOGICAL_POSITION(6);
 
 	ArmData.J1.Initial_Total_position=ArmData.J1.position;
 	ArmData.J2.Initial_Total_position=ArmData.J2.position;	
@@ -252,13 +325,13 @@ void Arm_L_Init(void)
 	ArmData.Grip.Kp = Grip_PID_KP;ArmData.Grip.Kd = Grip_PID_KD;
 
 do{	
-	arm_ramp_calc(&J1_L_position_set,0.0038,J1_zero_position);
-	arm_ramp_calc(&J2_L_position_set,0.0035,J2_zero_position);
-	arm_ramp_calc(&J3_L_position_set,0.0035,J3_zero_position);
-	arm_ramp_calc(&J4_L_position_set,0.0035,J4_zero_position);
-	arm_ramp_calc(&J5_L_position_set,0.0035,J5_zero_position);
-	arm_ramp_calc(&J6_L_position_set,0.0035,J6_zero_position);
-	arm_ramp_calc(&grip_L_position_set,0.0035,grip_zero_position);
+	arm_ramp_calc(&J1_L_position_set,0.0038,J1_zero_L);
+	arm_ramp_calc(&J2_L_position_set,0.0035,J2_zero_L);
+	arm_ramp_calc(&J3_L_position_set,0.0035,J3_zero_L);
+	arm_ramp_calc(&J4_L_position_set,0.0035,J4_zero_L);
+	arm_ramp_calc(&J5_L_position_set,0.0035,J5_zero_L);
+	arm_ramp_calc(&J6_L_position_set,0.0035,J6_zero_L);
+	arm_ramp_calc(&grip_L_position_set,0.0035,grip_zero_L);
 	
 	ArmData.J1.send_set = J1_L_position_set.out;
 	ArmData.J2.send_set = J2_L_position_set.out;
@@ -268,16 +341,19 @@ do{
 	ArmData.J6.send_set = J6_L_position_set.out;
 	ArmData.Grip.send_set = grip_L_position_set.out;
 	
-	limitPosition(&ArmData.J1.send_set,J1_Max_position,J1_Min_position);
-	limitPosition(&ArmData.J2.send_set,J2_Max_position,J2_Min_position);
-	limitPosition(&ArmData.J3.send_set,J3_Max_position,J3_Min_position);
-	limitPosition(&ArmData.J4.send_set,J4_Max_position,J4_Min_position);
-	limitPosition(&ArmData.J5.send_set,J5_Max_position,J5_Min_position);
-	limitPosition(&ArmData.J6.send_set,J6_Max_position,J6_Min_position);
-	limitPosition(&ArmData.Grip.send_set,Grip_Max_position,Grip_Min_position);
+	/* »ØÁãÄ¿±ê¾ÍÊÇ±ê¶¨Áãµã£ºÕâÀï²»ÄÜÔÙ°´ J2_Min/J3_Min=0 ÕâÀà¹¤×÷ÏŞÎ»Ç¯Î»£¬
+	   ·ñÔòÍ£ÔÚ¸º½Ç¶ÈµÄÖáÓÀÔ¶»Ø²»µ½Áãµã£¨do-while ÅĞ¾İÓÃµÄÊÇÎ´Ç¯Î»µÄ out£¬»á¼Ù×°µ½Î»£© */
+//	limitPosition(&ArmData.J1.send_set,J1_Max_position,J1_Min_position);
+//	limitPosition(&ArmData.J2.send_set,J2_Max_position,J2_Min_position);
+//	limitPosition(&ArmData.J3.send_set,J3_Max_position,J3_Min_position);
+//	limitPosition(&ArmData.J4.send_set,J4_Max_position,J4_Min_position);
+//	limitPosition(&ArmData.J5.send_set,J5_Max_position,J5_Min_position);
+//	limitPosition(&ArmData.J6.send_set,J6_Max_position,J6_Min_position);
+//	limitPosition(&ArmData.Grip.send_set,Grip_Max_position,Grip_Min_position);
+	Arm_Command_Publish();
 
 	//ï¿½Ğ¶ï¿½ï¿½Ç·ï¿½Øµï¿½ï¿½ï¿½Ê¼ï¿½ï¿½Ì¬
-	if(J1_L_position_set.out == J1_zero_position && J2_L_position_set.out == J2_zero_position && J3_L_position_set.out == J3_zero_position && J4_L_position_set.out == J4_zero_position && J5_L_position_set.out == J5_zero_position && J6_L_position_set.out == J6_zero_position && grip_L_position_set.out == grip_zero_position)
+	if(J1_L_position_set.out == J1_zero_L && J2_L_position_set.out == J2_zero_L && J3_L_position_set.out == J3_zero_L && J4_L_position_set.out == J4_zero_L && J5_L_position_set.out == J5_zero_L && J6_L_position_set.out == J6_zero_L && grip_L_position_set.out == grip_zero_L)
 	{
 			J1_J2_J3_J4_J5_J6_J7_init_flag = 0;
 	}
@@ -302,13 +378,13 @@ do{
 	ArmData.J6.Key_Control_Value = 0;
 	ArmData.Grip.Key_Control_Value = 0;
 
-    arm_data_ramp_init(&J1_L_position_set,1,0);	
-	arm_data_ramp_init(&J2_L_position_set,1,0); 
-	arm_data_ramp_init(&J3_L_position_set,1,J3_zero_position);	
-	arm_data_ramp_init(&J4_L_position_set,1,0); 
-	arm_data_ramp_init(&J5_L_position_set,1,0);	
-	arm_data_ramp_init(&J6_L_position_set,1,0);
-	arm_data_ramp_init(&grip_L_position_set,1,0);
+    arm_data_ramp_init(&J1_L_position_set,1,ArmData.J1.position);
+	arm_data_ramp_init(&J2_L_position_set,1,ArmData.J2.position);
+	arm_data_ramp_init(&J3_L_position_set,1,ArmData.J3.position);
+	arm_data_ramp_init(&J4_L_position_set,1,ArmData.J4.position);
+	arm_data_ramp_init(&J5_L_position_set,1,ArmData.J5.position);
+	arm_data_ramp_init(&J6_L_position_set,1,ArmData.J6.position);
+	arm_data_ramp_init(&grip_L_position_set,1,ArmData.Grip.position);
 	vTaskDelay(10);
 	Arm_L_Ready = 1;
 }
@@ -328,13 +404,54 @@ void data_updata(void)
 	
 	ArmData.ArmMode = GetArmMode();
 	
-	ArmData.J1.position = joint_L_motor[0].position;
-	ArmData.J2.position = joint_L_motor[1].position;
-	ArmData.J3.position = joint_L_motor[2].position;
-	ArmData.J4.position = joint_L_motor[3].position;
-	ArmData.J5.position = joint_L_motor[4].position;
-	ArmData.J6.position = joint_L_motor[5].position;
-	ArmData.Grip.position = joint_L_motor[6].position;
+	/* é€»è¾‘ä½ç½® P = p + bï¼›åŸå§‹åé¦ˆä»ä¿ç•™åœ¨ joint_L_motor[] */
+	ArmData.J1.position = JOINT_LOGICAL_POSITION(0);
+	ArmData.J2.position = JOINT_LOGICAL_POSITION(1);
+	ArmData.J3.position = JOINT_LOGICAL_POSITION(2);
+	ArmData.J4.position = JOINT_LOGICAL_POSITION(3);
+	ArmData.J5.position = JOINT_LOGICAL_POSITION(4);
+	ArmData.J6.position = JOINT_LOGICAL_POSITION(5);
+	ArmData.Grip.position = JOINT_LOGICAL_POSITION(6);
+}
+
+/************************* å‘½ä»¤å‘å¸ƒ *************************/
+/* å³ä¸Šå·¦ä¸­ï¼šå¤¹çˆªåŠ›çŸ©å¤¹å–ï¼ˆåŸ Moter_Task è¯» DT7 åŸå§‹æ‹¨æ†ï¼Œæ”¹ä¸ºä¸æ¨¡å¼åˆ¤æ–­åŒä¸€ RCDataï¼‰ */
+uint8_t Arm_Grip_Torque_Request(void)
+{
+	return (uint8_t)(switch_is_up(RCData.rc.s[RC_Right]) && switch_is_mid(RCData.rc.s[RC_Left]));
+}
+
+void Arm_Command_Publish(void)
+{
+	const DM_contorl_t *joint[7] = {
+		&ArmData.J1, &ArmData.J2, &ArmData.J3, &ArmData.J4,
+		&ArmData.J5, &ArmData.J6, &ArmData.Grip
+	};
+	uint8_t grip_torque = Arm_Grip_Torque_Request();
+
+	taskENTER_CRITICAL();
+	for (uint8_t i = 0; i < 7; i++)
+	{
+		ArmCommand.position[i] = joint[i]->send_set;
+		ArmCommand.kp[i]       = joint[i]->Kp;
+		ArmCommand.kd[i]       = joint[i]->Kd;
+		ArmCommand.torque[i]   = 0.0f;
+	}
+	if (grip_torque)
+	{
+		/* ä¸åŸå‘é€ä¸€è‡´ï¼šå¤¹çˆª Kp=Kd=0ï¼Œåªç»™åŠ›çŸ© */
+		ArmCommand.position[6] = ArmData.Grip.position;
+		ArmCommand.kp[6]       = 0.0f;
+		ArmCommand.kd[6]       = 0.0f;
+		ArmCommand.torque[6]   = ARM_GRIP_TORQUE;
+	}
+	ArmCommand.tick = xTaskGetTickCount();
+	ArmCommand.seq++;
+	if (ArmCommand.seq == 0U)
+	{
+		ArmCommand.seq = 1U;
+	}
+	taskEXIT_CRITICAL();
 }
 
 /************************* æ¨¡å¼åˆ¤æ–­ *************************/
@@ -398,26 +515,26 @@ void TAKE_Grip_1(void)
 	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
 	ArmData.Grip.Kp = J6_PID_KP;ArmData.Grip.Kd = J6_PID_KD;
 
-	J1_send_set = J1_reset_position;
-	J2_send_set = J2_reset_position;
-	J3_send_set = J3_reset_position;
-	J4_send_set = J4_reset_position;
-	J5_send_set = J5_reset_position;
-	J6_send_set = J6_reset_position;
-	Grip_send_set = 0;
+	J1_send_set = J1_reset_L;
+	J2_send_set = J2_reset_L;
+	J3_send_set = J3_reset_L;
+	J4_send_set = J4_reset_L;
+	J5_send_set = J5_reset_L;
+	J6_send_set = J6_reset_L;
+	Grip_send_set = grip_zero_L;
 
 	J1_ramp= 0.0090,J2_ramp= 0.003,J3_ramp= 0.0045,J4_ramp= 0.0042,J5_ramp= 0.003,J6_ramp= 0.003,Grip_ramp= 0.030;  //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 	/*ï¿½ï¿½×¶ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Øµï¿½Î»ï¿½ï¿½ï¿½Ù±Õºï¿½ï¿½ï¿½×¦È¡Ë®*/
 
 	/*ï¿½ï¿½Î»*/
-	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
-	limitPosition(&J2_send_set,J2_Max_position,J2_Min_position);
-	limitPosition(&J3_send_set,J3_Max_position,J3_Min_position);
-	limitPosition(&J4_send_set,J4_Max_position,J4_Min_position);
-	limitPosition(&J5_send_set,J5_Max_position,J5_Min_position);
-	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
-	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
+	limitPosition(&J1_send_set,J1_max_L,J1_min_L);
+	limitPosition(&J2_send_set,J2_max_L,J2_min_L);
+	limitPosition(&J3_send_set,J3_max_L,J3_min_L);
+	limitPosition(&J4_send_set,J4_max_L,J4_min_L);
+	limitPosition(&J5_send_set,J5_max_L,J5_min_L);
+	limitPosition(&J6_send_set,J6_max_L,J6_min_L);
+	limitPosition(&Grip_send_set,Grip_max_L,Grip_min_L);
 
 	/*Ğ±ï¿½Âºï¿½ï¿½ï¿½*/
 	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
@@ -449,26 +566,26 @@ void ARM_RESET_1(void)
 	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
 	ArmData.Grip.Kp = J6_PID_KP;ArmData.Grip.Kd = J6_PID_KD;
 
-	J1_send_set = J1_reset_position;
-	J2_send_set = J2_reset_position;
-	J3_send_set = J3_reset_position;
-	J4_send_set = J4_reset_position;
-	J5_send_set = J5_reset_position;
-	J6_send_set = J6_reset_position;
-	Grip_send_set = Grip_TAKE_position_1;
+	J1_send_set = J1_reset_L;
+	J2_send_set = J2_reset_L;
+	J3_send_set = J3_reset_L;
+	J4_send_set = J4_reset_L;
+	J5_send_set = J5_reset_L;
+	J6_send_set = J6_reset_L;
+	Grip_send_set = Grip_take_L;
 
 	J1_ramp= 0.0090,J2_ramp= 0.003,J3_ramp= 0.0045,J4_ramp= 0.0042,J5_ramp= 0.003,J6_ramp= 0.003,Grip_ramp= 0.030;  //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 	/*ï¿½ï¿½×¶ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Øµï¿½Î»ï¿½ï¿½ï¿½Ù±Õºï¿½ï¿½ï¿½×¦È¡Ë®*/
 
 	/*ï¿½ï¿½Î»*/
-	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
-	limitPosition(&J2_send_set,J2_Max_position,J2_Min_position);
-	limitPosition(&J3_send_set,J3_Max_position,J3_Min_position);
-	limitPosition(&J4_send_set,J4_Max_position,J4_Min_position);
-	limitPosition(&J5_send_set,J5_Max_position,J5_Min_position);
-	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
-	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
+	limitPosition(&J1_send_set,J1_max_L,J1_min_L);
+	limitPosition(&J2_send_set,J2_max_L,J2_min_L);
+	limitPosition(&J3_send_set,J3_max_L,J3_min_L);
+	limitPosition(&J4_send_set,J4_max_L,J4_min_L);
+	limitPosition(&J5_send_set,J5_max_L,J5_min_L);
+	limitPosition(&J6_send_set,J6_max_L,J6_min_L);
+	limitPosition(&Grip_send_set,Grip_max_L,Grip_min_L);
 
 	/*Ğ±ï¿½Âºï¿½ï¿½ï¿½*/
 	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
@@ -500,24 +617,24 @@ void PASS_WATER_1(void)
 	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
 	ArmData.Grip.Kp = J6_PID_KP;ArmData.Grip.Kd = J6_PID_KD;
 
-	J1_send_set = J1_TAKE_position;
-	J2_send_set = J2_TAKE_position;
-	J3_send_set = J3_TAKE_position;
-	J4_send_set = J4_TAKE_position;
-	J5_send_set = J5_TAKE_position;
-	J6_send_set = J6_TAKE_position;
-	Grip_send_set = Grip_TAKE_position_1;
+	J1_send_set = J1_take_L;
+	J2_send_set = J2_take_L;
+	J3_send_set = J3_take_L;
+	J4_send_set = J4_take_L;
+	J5_send_set = J5_take_L;
+	J6_send_set = J6_take_L;
+	Grip_send_set = Grip_take_L;
 
 	J1_ramp= 0.0090,J2_ramp= 0.003,J3_ramp= 0.0045,J4_ramp= 0.0042,J5_ramp= 0.003,J6_ramp= 0.003,Grip_ramp= 0.030;  
 
 	
-	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
-	limitPosition(&J2_send_set,J2_Max_position,J2_Min_position);
-	limitPosition(&J3_send_set,J3_Max_position,J3_Min_position);
-	limitPosition(&J4_send_set,J4_Max_position,J4_Min_position);
-	limitPosition(&J5_send_set,J5_Max_position,J5_Min_position);
-	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
-	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
+	limitPosition(&J1_send_set,J1_max_L,J1_min_L);
+	limitPosition(&J2_send_set,J2_max_L,J2_min_L);
+	limitPosition(&J3_send_set,J3_max_L,J3_min_L);
+	limitPosition(&J4_send_set,J4_max_L,J4_min_L);
+	limitPosition(&J5_send_set,J5_max_L,J5_min_L);
+	limitPosition(&J6_send_set,J6_max_L,J6_min_L);
+	limitPosition(&Grip_send_set,Grip_max_L,Grip_min_L);
 
 	/*Ğ±ï¿½Âºï¿½ï¿½ï¿½*/
 	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
@@ -551,13 +668,13 @@ void TAKE_WATER_1(void)
 	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
 	ArmData.Grip.Kp = J6_PID_KP;ArmData.Grip.Kd = J6_PID_KD;
 
-	J1_send_set = J1_TAKE_position;
-	J2_send_set = J2_TAKE_position;
-	J3_send_set = J3_TAKE_position;
-	J4_send_set = J4_TAKE_position;
-	J5_send_set = J5_TAKE_position;
-	J6_send_set = J6_TAKE_position;
-	Grip_send_set = 0;
+	J1_send_set = J1_take_L;
+	J2_send_set = J2_take_L;
+	J3_send_set = J3_take_L;
+	J4_send_set = J4_take_L;
+	J5_send_set = J5_take_L;
+	J6_send_set = J6_take_L;
+	Grip_send_set = grip_zero_L;
 
 //	Grip_send_set = grip_zero_position;
 
@@ -566,13 +683,13 @@ void TAKE_WATER_1(void)
 	/*ï¿½ï¿½×¶ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Øµï¿½Î»ï¿½ï¿½ï¿½Ù±Õºï¿½ï¿½ï¿½×¦È¡Ë®*/
 
 	/*ï¿½ï¿½Î»*/
-	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
-	limitPosition(&J2_send_set,J2_Max_position,J2_Min_position);
-	limitPosition(&J3_send_set,J3_Max_position,J3_Min_position);
-	limitPosition(&J4_send_set,J4_Max_position,J4_Min_position);
-	limitPosition(&J5_send_set,J5_Max_position,J5_Min_position);
-	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
-	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
+	limitPosition(&J1_send_set,J1_max_L,J1_min_L);
+	limitPosition(&J2_send_set,J2_max_L,J2_min_L);
+	limitPosition(&J3_send_set,J3_max_L,J3_min_L);
+	limitPosition(&J4_send_set,J4_max_L,J4_min_L);
+	limitPosition(&J5_send_set,J5_max_L,J5_min_L);
+	limitPosition(&J6_send_set,J6_max_L,J6_min_L);
+	limitPosition(&Grip_send_set,Grip_max_L,Grip_min_L);
 
 	/*Ğ±ï¿½Âºï¿½ï¿½ï¿½*/
 	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
@@ -1175,13 +1292,13 @@ void Arm_PC_Control(void)
 
 	/* æ ‡å‡†é™æ€é™ä½ï¼ˆé˜²å¾¡æ·±åº¦ï¼‰ã€‚PC æ¨¡å¼ä¸æ‰§è¡Œ J1/J2 ç¢°æ’åŒºé™ä½ï¼Œ
 	   è¯¥é™ä½åªåœ¨é¥æ§æ¨¡å¼ä¸­ç”Ÿæ•ˆã€‚ */
-	limitPosition(&ArmData.J1.send_set, J1_Max_position, J1_Min_position);
-	limitPosition(&ArmData.J2.send_set, J2_Max_position, J2_Min_position);
-	limitPosition(&ArmData.J3.send_set, J3_Max_position, J3_Min_position);
-	limitPosition(&ArmData.J4.send_set, J4_Max_position, J4_Min_position);
-	limitPosition(&ArmData.J5.send_set, J5_Max_position, J5_Min_position);
-	limitPosition(&ArmData.J6.send_set, J6_Max_position, J6_Min_position);
-	limitPosition(&ArmData.Grip.send_set, Grip_Max_position, Grip_Min_position);
+	limitPosition(&ArmData.J1.send_set,J1_max_L,J1_min_L);
+	limitPosition(&ArmData.J2.send_set,J2_max_L,J2_min_L);
+	limitPosition(&ArmData.J3.send_set,J3_max_L,J3_min_L);
+	limitPosition(&ArmData.J4.send_set,J4_max_L,J4_min_L);
+	limitPosition(&ArmData.J5.send_set,J5_max_L,J5_min_L);
+	limitPosition(&ArmData.J6.send_set,J6_max_L,J6_min_L);
+	limitPosition(&ArmData.Grip.send_set,Grip_max_L,Grip_min_L);
 
 	/* åŒæ­¥æ–œå¡çŠ¶æ€ï¼Œé˜²æ­¢åˆ‡å‡º PC æ¨¡å¼åè·³å˜ */
 	J1_L_position_set.out = ArmData.J1.send_set;
@@ -1210,8 +1327,13 @@ void Arm_L_Movement_J1_J4(void)
 	ArmData.J4.Kp = J4_PID_KP;ArmData.J4.Kd = J4_PID_KD;
 	ArmData.J5.Kp = J5_PID_KP;ArmData.J5.Kd = J5_PID_KD;
 	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
-	ArmData.Grip.Kp = J6_PID_KP;ArmData.Grip.Kd = J6_PID_KD;
+	ArmData.Grip.Kp = Grip_PID_KP;ArmData.Grip.Kd = Grip_PID_KD;
+	/* ±¾Ä£Ê½Ã»ÓĞ±ğ´¦¸ø Grip_ramp ¸³Öµ£¬ÕâÀïÏÔÊ½¸ø³ö¼Ğ×¦Ğ±ÂÊ */
+	Grip_ramp = 0.030;
 	/*Ò£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Û¼ï¿½Öµ*/                 
+	/* ÀÛ¼ÓÏŞÎ»£º´°¿Ú = Á¿³Ì - Áãµã - ¸½¼ÓÆ«ÖÃ£¨Custom_RC / Key£©¡£
+	   ÕâÀï¿ÌÒâ²»ÓÃ Initial_Total_position£ºÄÇÊÇÉÏµçÊ±µÄÒ»´ÎĞÔ×ËÌ¬£¬»á°ÑÕû¸ö´°¿ÚÆ½ÒÆ£¬
+	   ½á¹ûÊÇÖ¸ÁîÒÑ¾­¶¥µ½Á¿³Ì¡¢ÀÛ¼ÓÆ÷»¹ÔÚ¼ÌĞø³¤£¬·´ÏòÊ±Òª¿ÕÍÆÒ»¶Î²Å¶¯¡£ */
 	ArmData.J1.RC_Sum_Value += channel_0*0.00001;
 	ArmData.J2.RC_Sum_Value += channel_1*0.00001;
 	ArmData.J3.RC_Sum_Value += channel_0*0.00001;
@@ -1220,39 +1342,45 @@ void Arm_L_Movement_J1_J4(void)
 	ArmData.J6.RC_Sum_Value += channel_2*0.00002;
 	ArmData.Grip.RC_Sum_Value += channel_3*0.00005;
 
-	if(joint_L_motor[1].position < J1_J2_ZONE_J2_MAX)
+	if(ArmData.J2.position < J2_zone_L)
 	{
-		limitPosition(&ArmData.J1.RC_Sum_Value,J1_Max_position - ArmData.J1.Initial_Total_position,J1_J2_ZONE_J1_MIN - ArmData.J1.Initial_Total_position);
-	}	
+		limitPosition(&ArmData.J1.RC_Sum_Value,J1_J2_ZONE_J1_MIN - J1_zero_position,J1_Min_position - J1_zero_position);
+	}
 	else
 	{
-		limitPosition(&ArmData.J1.RC_Sum_Value,J1_Max_position - ArmData.J1.Initial_Total_position,J1_Min_position - ArmData.J1.Initial_Total_position);
-	}  
+		limitPosition(&ArmData.J1.RC_Sum_Value,J1_Max_position - J1_zero_position,J1_Min_position - J1_zero_position);
+	}
+	limitPosition(&ArmData.J2.RC_Sum_Value,J2_Max_position - J2_zero_position,J2_Min_position - J2_zero_position);
+	limitPosition(&ArmData.J3.RC_Sum_Value,J3_Max_position - J3_zero_position,J3_Min_position - J3_zero_position);
+	limitPosition(&ArmData.J4.RC_Sum_Value,J4_Max_position - J4_zero_position,J4_Min_position - J4_zero_position);
+	limitPosition(&ArmData.J5.RC_Sum_Value,J5_Max_position - J5_zero_position - Custom_RC[4].DM_CC_receive - ArmData.J5.Key_Control_Value,J5_Min_position - J5_zero_position - Custom_RC[4].DM_CC_receive - ArmData.J5.Key_Control_Value);
+	limitPosition(&ArmData.J6.RC_Sum_Value,J6_Max_position - J6_zero_position - Custom_RC[5].DM_CC_receive - ArmData.J6.Key_Control_Value,J6_Min_position - J6_zero_position - Custom_RC[5].DM_CC_receive - ArmData.J6.Key_Control_Value);
+	limitPosition(&ArmData.Grip.RC_Sum_Value,Grip_Max_position - grip_zero_position - ArmData.Grip.Key_Control_Value,Grip_Min_position - grip_zero_position - ArmData.Grip.Key_Control_Value);
 	
 	/*ï¿½ï¿½ï¿½Í¸ï¿½MITï¿½ï¿½ï¿½ï¿½Ä£Ê½ï¿½ÂµÄºï¿½ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½*/
-	J1_set_initial_data = J1_zero_position + ArmData.J1.RC_Sum_Value;  //J1_zero_position + ArmData.J1.RC_Sum_Value + Custom_RC[0].DM_CC_receive;
-	J2_set_initial_data = J2_zero_position + ArmData.J2.RC_Sum_Value;
-	J3_set_initial_data = J3_zero_position + ArmData.J3.RC_Sum_Value;
-	J4_set_initial_data = J4_zero_position + ArmData.J4.RC_Sum_Value;
-	J5_set_initial_data = J5_zero_position + ArmData.J5.RC_Sum_Value + Custom_RC[4].DM_CC_receive;
-	J6_set_initial_data = J6_zero_position + ArmData.J6.RC_Sum_Value + Custom_RC[5].DM_CC_receive;
-	Grip_set_initial_data = grip_zero_position + ArmData.Grip.RC_Sum_Value;
+	J1_set_initial_data = J1_zero_L + ArmData.J1.RC_Sum_Value;  //J1_zero_L + ArmData.J1.RC_Sum_Value + Custom_RC[0].DM_CC_receive;
+	J2_set_initial_data = J2_zero_L + ArmData.J2.RC_Sum_Value;
+	J3_set_initial_data = J3_zero_L + ArmData.J3.RC_Sum_Value;
+	J4_set_initial_data = J4_zero_L + ArmData.J4.RC_Sum_Value;
+	J5_set_initial_data = J5_zero_L + ArmData.J5.RC_Sum_Value + Custom_RC[4].DM_CC_receive;
+	J6_set_initial_data = J6_zero_L + ArmData.J6.RC_Sum_Value + Custom_RC[5].DM_CC_receive;
+	Grip_set_initial_data = grip_zero_L + ArmData.Grip.RC_Sum_Value;
 
-	J1_send_set = J1_zero_position + ArmData.J1.RC_Sum_Value;    //J1_zero_position + ArmData.J1.RC_Sum_Value + Custom_RC[0].DM_CC_receive + ArmData.J1.Key_Control_Value;//ï¿½ï¿½nï¿½ï¿½ï¿½Ø½Úµï¿½ï¿½ï¿½ï¿½Ê¼Î»ï¿½ï¿½+Ò£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½+ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-	J2_send_set = J2_zero_position + ArmData.J2.RC_Sum_Value;
-	J3_send_set = J3_zero_position + ArmData.J3.RC_Sum_Value;
-	J4_send_set = J4_zero_position + ArmData.J4.RC_Sum_Value;
-	J5_send_set = J5_zero_position + ArmData.J5.RC_Sum_Value + Custom_RC[4].DM_CC_receive + ArmData.J5.Key_Control_Value;
-	J6_send_set = J6_zero_position + ArmData.J6.RC_Sum_Value + Custom_RC[5].DM_CC_receive + ArmData.J6.Key_Control_Value;
-	Grip_send_set = grip_zero_position + ArmData.Grip.RC_Sum_Value + ArmData.Grip.Key_Control_Value;
+	J1_send_set = J1_zero_L + ArmData.J1.RC_Sum_Value;    //J1_zero_L + ArmData.J1.RC_Sum_Value + Custom_RC[0].DM_CC_receive + ArmData.J1.Key_Control_Value;//ï¿½ï¿½nï¿½ï¿½ï¿½Ø½Úµï¿½ï¿½ï¿½ï¿½Ê¼Î»ï¿½ï¿½+Ò£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½+ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	J2_send_set = J2_zero_L + ArmData.J2.RC_Sum_Value;
+	J3_send_set = J3_zero_L + ArmData.J3.RC_Sum_Value;
+	J4_send_set = J4_zero_L + ArmData.J4.RC_Sum_Value;
+	J5_send_set = J5_zero_L + ArmData.J5.RC_Sum_Value + Custom_RC[4].DM_CC_receive + ArmData.J5.Key_Control_Value;
+	J6_send_set = J6_zero_L + ArmData.J6.RC_Sum_Value + Custom_RC[5].DM_CC_receive + ArmData.J6.Key_Control_Value;
+	Grip_send_set = grip_zero_L + ArmData.Grip.RC_Sum_Value + ArmData.Grip.Key_Control_Value;
 	
-	if(joint_L_motor[1].position < J1_J2_ZONE_J2_MAX)
+	if(ArmData.J2.position < J2_zone_L)
 	{
-		limitPosition(&J1_send_set,J1_Max_position,J1_J2_ZONE_J1_MIN);
+		limitPosition(&J1_send_set,J1_max_L,J1_zone_L);
 	}	
 	else
 	{
-		limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
+		limitPosition(&J1_send_set,J1_max_L,J1_min_L);
 	}  
 	/*ï¿½ï¿½ï¿½Î»ï¿½Ã¸ï¿½Öµ*/
 	ArmData.J1.send_set = J1_send_set;
@@ -1263,25 +1391,18 @@ void Arm_L_Movement_J1_J4(void)
 	ArmData.J6.send_set = J6_send_set;
 	ArmData.Grip.send_set = Grip_send_set;
 
-	/* åŒæ­¥æ–œå¡çŠ¶æ€é‡åˆ°å½“å‰å®é™…ä½ç½®ï¼Œé¿å…åˆ‡æ¨¡å¼æ—¶ä»é›¶ç‚¹èµ·è·³ */
+	/* Í¬²½Ğ±ÆÂ×´Ì¬Á¿µ½µ±Ç°Êµ¼ÊÎ»ÖÃ£¬±ÜÃâÇĞÄ£Ê½Ê±´ÓÁãµãÆğÌø£¨¼Ğ×¦ÀıÍâ£º¼Ğ×¦×ßĞ±ÆÂ£© */
 	J1_L_position_set.out = ArmData.J1.position;
 	J2_L_position_set.out = ArmData.J2.position;
 	J3_L_position_set.out = ArmData.J3.position;
 	J4_L_position_set.out = ArmData.J4.position;
 	J5_L_position_set.out = ArmData.J5.position;
 	J6_L_position_set.out = ArmData.J6.position;
-	grip_L_position_set.out = ArmData.Grip.position;
 
-//	Arm_Key_Control_mode();  //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-	
-	/*ï¿½ï¿½Î»*/  
-	limitPosition(&ArmData.J1.RC_Sum_Value,J1_Max_position - ArmData.J1.Initial_Total_position,J1_Min_position - ArmData.J1.Initial_Total_position);
-	limitPosition(&ArmData.J2.RC_Sum_Value,J2_Max_position - ArmData.J2.Initial_Total_position - ArmData.J2.Key_Control_Value,J2_Min_position - ArmData.J2.Initial_Total_position - ArmData.J2.Key_Control_Value);
-	limitPosition(&ArmData.J3.RC_Sum_Value,J3_Max_position - ArmData.J3.Initial_Total_position,J3_Min_position - ArmData.J3.Initial_Total_position);
-	limitPosition(&ArmData.J4.RC_Sum_Value,J4_Max_position - ArmData.J4.Initial_Total_position - ArmData.J4.Key_Control_Value,J4_Min_position - ArmData.J4.Initial_Total_position - ArmData.J4.Key_Control_Value);
-	limitPosition(&ArmData.J5.RC_Sum_Value,J5_Max_position - ArmData.J5.Initial_Total_position,J5_Min_position - ArmData.J5.Initial_Total_position);
-	limitPosition(&ArmData.J6.RC_Sum_Value,J6_Max_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value,J6_Min_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value);
-	limitPosition(&ArmData.Grip.RC_Sum_Value,J6_Max_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value,J6_Min_position - ArmData.J6.Initial_Total_position - ArmData.J6.Key_Control_Value);
+//	Arm_Key_Control_mode();
+
+	/*ÏŞÎ»*/
+	/* ¸÷Öá RC_Sum µÄÇ¯Î»ÒÑÍ³Ò»Å²µ½ÉÏÃæµÄÀÛ¼Ó´¦£¬ÕâÀï²»ÔÙÖØ¸´ */
 
 //				J1_send_set = R_J1_get_position_1;
 //				J2_send_set = R_J2_get_position_1;
@@ -1290,21 +1411,25 @@ void Arm_L_Movement_J1_J4(void)
 //				J5_send_set = R_J5_get_position_1;
 //				J6_send_set = R_J6_get_position_1;
 //				Grip_send_set =R_Grip_get_position_1;	
-	if(joint_L_motor[1].position < J1_J2_ZONE_J2_MAX)
+	if(ArmData.J2.position < J2_zone_L)
 	{
-		limitPosition(&ArmData.J1.send_set,J1_Max_position,J1_J2_ZONE_J1_MIN);
+		limitPosition(&ArmData.J1.send_set,J1_max_L,J1_zone_L);
 	}	
 	else
 	{
-		limitPosition(&ArmData.J1.send_set,J1_Max_position,J1_Min_position);
+		limitPosition(&ArmData.J1.send_set,J1_max_L,J1_min_L);
 	}  
-	limitPosition(&ArmData.J1.send_set,J1_Max_position,J1_Min_position);
-	limitPosition(&ArmData.J2.send_set,J2_Max_position,J2_Min_position);
-	limitPosition(&ArmData.J3.send_set,J3_Max_position,J3_Min_position);
-	limitPosition(&ArmData.J4.send_set,J4_Max_position,J4_Min_position);
-	limitPosition(&ArmData.J5.send_set,J5_Max_position,J5_Min_position);
-	limitPosition(&ArmData.J6.send_set,J6_Max_position,J6_Min_position);
-	limitPosition(&ArmData.Grip.send_set,Grip_Max_position,Grip_Min_position);
+	limitPosition(&ArmData.J1.send_set,J1_max_L,J1_min_L);
+	limitPosition(&ArmData.J2.send_set,J2_max_L,J2_min_L);
+	limitPosition(&ArmData.J3.send_set,J3_max_L,J3_min_L);
+	limitPosition(&ArmData.J4.send_set,J4_max_L,J4_min_L);
+	limitPosition(&ArmData.J5.send_set,J5_max_L,J5_min_L);
+	limitPosition(&ArmData.J6.send_set,J6_max_L,J6_min_L);
+	limitPosition(&ArmData.Grip.send_set,Grip_max_L,Grip_min_L);
+
+	/* ¼Ğ×¦Ğ±ÆÂ£º±¾Ä£Ê½ÒÔÇ°Ã»ÓĞµ÷ÓÃ arm_ramp_calc£¬Grip_ramp ĞÎÍ¬ĞéÉè */
+	arm_ramp_calc(&grip_L_position_set,Grip_ramp,ArmData.Grip.send_set);
+	ArmData.Grip.send_set = grip_L_position_set.out;
 	
 	/*ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°Î»ï¿½Ã¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£Ê½*/
 	ArmData.J1.Now_set_position = ArmData.J1.send_set;
@@ -1319,46 +1444,8 @@ void Arm_L_Movement_J1_J4(void)
 
 void Arm_return_initial_position(void)
 {
-	ArmData.J1.send_set=joint_L_motor[0].position;
-	ArmData.J2.send_set=joint_L_motor[1].position;
-	ArmData.J3.send_set=joint_L_motor[2].position;
-	ArmData.J4.send_set=joint_L_motor[3].position;
-	ArmData.J5.send_set=joint_L_motor[4].position;
-	ArmData.J6.send_set=joint_L_motor[5].position;
-	ArmData.Grip.send_set=joint_L_motor[6].position;
-	osDelay(500);
-	ArmData.J1.position=joint_L_motor[0].position;
-	ArmData.J2.position=joint_L_motor[1].position;
-	ArmData.J3.position=joint_L_motor[2].position;
-	ArmData.J4.position=joint_L_motor[3].position;
-	ArmData.J5.position=joint_L_motor[4].position;
-	ArmData.J6.position=joint_L_motor[5].position;
-	ArmData.Grip.position=joint_L_motor[6].position;
-
-	ArmData.J1.send_set=joint_L_motor[0].position;
-	ArmData.J2.send_set=joint_L_motor[1].position;
-	ArmData.J3.send_set=joint_L_motor[2].position;
-	ArmData.J4.send_set=joint_L_motor[3].position;
-	ArmData.J5.send_set=joint_L_motor[4].position;
-	ArmData.J6.send_set=joint_L_motor[5].position;
-	ArmData.Grip.send_set=joint_L_motor[6].position;
-
-	ArmData.J1.Initial_Total_position=ArmData.J1.position;
-	ArmData.J2.Initial_Total_position=ArmData.J2.position;	
-	ArmData.J3.Initial_Total_position=ArmData.J3.position;
-	ArmData.J4.Initial_Total_position=ArmData.J4.position;	
-	ArmData.J5.Initial_Total_position=ArmData.J5.position;
-	ArmData.J6.Initial_Total_position=ArmData.J6.position;	 
-	ArmData.Grip.Initial_Total_position=ArmData.Grip.position;	
-
-	arm_data_ramp_init(&J1_L_position_set,1,ArmData.J1.Initial_Total_position);	
-	arm_data_ramp_init(&J2_L_position_set,1,ArmData.J2.Initial_Total_position); 
-	arm_data_ramp_init(&J3_L_position_set,1,ArmData.J3.Initial_Total_position);	
-	arm_data_ramp_init(&J4_L_position_set,1,ArmData.J4.Initial_Total_position); 
-	arm_data_ramp_init(&J5_L_position_set,1,ArmData.J5.Initial_Total_position);	
-	arm_data_ramp_init(&J6_L_position_set,1,ArmData.J6.Initial_Total_position);
-	arm_data_ramp_init(&grip_L_position_set,1,ArmData.Grip.Initial_Total_position);
-	
+	/* ·Ç×èÈû¸´Î»£ºÃ¿¸ö 8 ms ÖÜÆÚÏòÁãµãÍÆ½øÒ»²½£¬ÓÉ Arm_L_Task Ö÷Ñ­»·µ÷ÓÃ£»
+	   ½øÈë±¾Ä£Ê½Ê±Ä£Ê½ÇĞ»»¿éÒÑ°Ñ¸÷ÖáĞ±ÆÂ¶ÔÆëµ½Êµ¼ÊÎ»ÖÃ¡£ */
 	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
 	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
 	ArmData.J3.Kp = J3_PID_KP;ArmData.J3.Kd = J3_PID_KD;
@@ -1366,41 +1453,23 @@ void Arm_return_initial_position(void)
 	ArmData.J5.Kp = J5_PID_KP;ArmData.J5.Kd = J5_PID_KD;
 	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
 	ArmData.Grip.Kp = Grip_PID_KP;ArmData.Grip.Kd = Grip_PID_KD;
-	
-	fp32 J1_J2_J3_J4_J5_J6_J7_flag = 1;
 
-	do{	
-		arm_ramp_calc(&J1_L_position_set,0.002,J1_zero_position);
-		arm_ramp_calc(&J2_L_position_set,0.002,J2_zero_position);
-		arm_ramp_calc(&J3_L_position_set,0.002,J3_zero_position);
-		arm_ramp_calc(&J4_L_position_set,0.002,J4_zero_position);
-		arm_ramp_calc(&J5_L_position_set,0.002,J5_zero_position);
-		arm_ramp_calc(&J6_L_position_set,0.002,J6_zero_position);
-		arm_ramp_calc(&grip_L_position_set,0.002,grip_zero_position);
-		
-		ArmData.J1.send_set = J1_L_position_set.out;
-		ArmData.J2.send_set = J2_L_position_set.out;
-		ArmData.J3.send_set = J3_L_position_set.out;
-		ArmData.J4.send_set = J4_L_position_set.out;
-		ArmData.J5.send_set = J5_L_position_set.out;
-		ArmData.J6.send_set = J6_L_position_set.out;
-		ArmData.Grip.send_set = grip_L_position_set.out;
-		
-		limitPosition(&ArmData.J1.send_set,J1_Max_position,J1_Min_position);
-		limitPosition(&ArmData.J2.send_set,J2_Max_position,J2_Min_position);
-		limitPosition(&ArmData.J3.send_set,J3_Max_position,J3_Min_position);
-		limitPosition(&ArmData.J4.send_set,J4_Max_position,J4_Min_position);
-		limitPosition(&ArmData.J5.send_set,J5_Max_position,J5_Min_position);
-		limitPosition(&ArmData.J6.send_set,J6_Max_position,J6_Min_position);
-		limitPosition(&ArmData.Grip.send_set,Grip_Max_position,Grip_Min_position);
+	arm_ramp_calc(&J1_L_position_set,0.002,J1_zero_L);
+	arm_ramp_calc(&J2_L_position_set,0.002,J2_zero_L);
+	arm_ramp_calc(&J3_L_position_set,0.002,J3_zero_L);
+	arm_ramp_calc(&J4_L_position_set,0.002,J4_zero_L);
+	arm_ramp_calc(&J5_L_position_set,0.002,J5_zero_L);
+	arm_ramp_calc(&J6_L_position_set,0.002,J6_zero_L);
+	arm_ramp_calc(&grip_L_position_set,0.002,grip_zero_L);
 
-		//ï¿½Ğ¶ï¿½ï¿½Ç·ï¿½Øµï¿½ï¿½ï¿½Ê¼ï¿½ï¿½Ì¬
-		if(J1_L_position_set.out == J1_zero_position && J2_L_position_set.out == J2_zero_position && J3_L_position_set.out == J3_zero_position && J4_L_position_set.out == J4_zero_position && J5_L_position_set.out == J5_zero_position && J6_L_position_set.out == J6_zero_position && grip_L_position_set.out == grip_zero_position)
-		{
-				J1_J2_J3_J4_J5_J6_J7_flag = 0;
-		}
-		osDelay(5);
-	}while(J1_J2_J3_J4_J5_J6_J7_flag);
+	ArmData.J1.send_set = J1_L_position_set.out;
+	ArmData.J2.send_set = J2_L_position_set.out;
+	ArmData.J3.send_set = J3_L_position_set.out;
+	ArmData.J4.send_set = J4_L_position_set.out;
+	ArmData.J5.send_set = J5_L_position_set.out;
+	ArmData.J6.send_set = J6_L_position_set.out;
+	ArmData.Grip.send_set = grip_L_position_set.out;
+	/* »ØÁãÍ¬Ñù²»ÄÜÓÃ J2_Min/J3_Min=0 Ö®ÀàµÄ¹¤×÷ÏŞÎ»Ç¯Î»£¬·ñÔòµ½²»ÁËÁãµã */
 }
 
 void Chassis_Movement(void)

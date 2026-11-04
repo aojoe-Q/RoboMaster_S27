@@ -17,7 +17,7 @@
 /**
  * @brief remote control usart RxDMA MultiBuffer
  */
-__attribute__((section (".AXI_SRAM"))) uint8_t SBUS_MultiRx_Buf[2][SBUS_RX_BUF_NUM];
+__attribute__((section (".AXI_SRAM"))) uint8_t SBUS_MultiRx_Buf[2][SBUS_RX_BUF_NUM*2];  /* NDTR reload is SBUS_RX_BUF_NUM*2 */
  
 /* Private variables ---------------------------------------------------------*/
 /**

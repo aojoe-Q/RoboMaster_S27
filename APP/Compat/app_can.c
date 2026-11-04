@@ -7,6 +7,14 @@
 #include "task.h"
 #include <string.h>
 
+/* °´Öá DM Î»ÖÃÓ³Éä·¶Î§£¬Óëµç»ú PMAX (¼Ä´æÆ÷ 0x15) Ò»ÖÂ£¬¼û can_bsp.h */
+const float Joint_P_MAX[7] = { JOINT_P_MAX_NORMAL, JOINT_P_MAX_NORMAL, JOINT_P_MAX_NORMAL,
+                               JOINT_P_MAX_NORMAL, JOINT_P_MAX_NORMAL, JOINT_P_MAX_NORMAL,
+                               JOINT_P_MAX_GRIP };
+const float Joint_P_MIN[7] = { JOINT_P_MIN_NORMAL, JOINT_P_MIN_NORMAL, JOINT_P_MIN_NORMAL,
+                               JOINT_P_MIN_NORMAL, JOINT_P_MIN_NORMAL, JOINT_P_MIN_NORMAL,
+                               JOINT_P_MIN_GRIP };
+
 /* Joint feedback and board data live here so the APP sources stay unchanged.
  * joint_L_motor itself is defined by Arm_L_task.c (as in S27_ARM_H7). */
 Rcdata_t              RCData;
@@ -159,15 +167,35 @@ static void APP_DecodeJoint(uint8_t joint, const uint8_t *data)
     motor = &joint_L_motor[joint];
 
     motor->motorid  = (uint32_t)(data[0] & 0x0FU);
+    motor->err      = (uint8_t)(data[0] >> 4);
     motor->p_int    = (int)((uint16_t)data[1] << 8 | data[2]);
     motor->v_int    = (int)((uint16_t)data[3] << 4 | (data[4] >> 4));
     motor->t_int    = (int)(((uint16_t)(data[4] & 0x0FU) << 8) | data[5]);
-    motor->position = uint_to_float(motor->p_int, P_MIN, P_MAX, 16);
+    motor->position = uint_to_float(motor->p_int, Joint_P_MIN[joint], Joint_P_MAX[joint], 16);
     motor->velocity = uint_to_float(motor->v_int, V_MIN, V_MAX, 12);
     motor->torque   = uint_to_float(motor->t_int, T_MIN, T_MAX, 12);
     /* FDCAN RX interrupt (priority 5, FreeRTOS-safe). */
     motor->update_tick = (uint32_t)xTaskGetTickCountFromISR();
     motor->update_count++;
+}
+
+uint8_t APP_Joint_Fresh_Mask(uint32_t now_tick)
+{
+    uint8_t mask = 0U;
+
+    for (uint8_t i = 0; i < 7U; i++)
+    {
+        const joint_motor_measure_t *m = &joint_L_motor[i];
+        /* Feedback decoded after now_tick was sampled counts as age 0. */
+        int32_t age = (int32_t)(now_tick - m->update_tick);
+
+        if ((m->update_count != 0U) && (age <= (int32_t)JOINT_FEEDBACK_TIMEOUT_MS) &&
+            (m->err < JOINT_ERR_FAULT_MIN))
+        {
+            mask |= (uint8_t)(1U << i);
+        }
+    }
+    return mask;
 }
 
 /*

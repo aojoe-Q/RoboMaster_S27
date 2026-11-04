@@ -28,6 +28,7 @@
 ArmData_t ArmData;
 volatile uint8_t Arm_L_Ready = 1;
 joint_motor_measure_t joint_L_motor[7];
+float Joint_Boot_Offset[7];         /* logical = raw in the test */
 
 static uint32_t fake_ms;
 static bool     fake_connected = true;

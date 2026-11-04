@@ -33,7 +33,10 @@ for a in flags.split():
 files = [r"..\APP\Arm_USB_task.c", r"..\APP\arm_usb_protocol.c", r"..\APP\ring_buffer.c",
          r"..\Components\Device\Src\MiniPC.c", r"..\USB_DEVICE\App\usbd_cdc_if.c",
          r"..\Core\Src\freertos.c", r"..\APP\Compat\app_can.c", r"..\APP\Arm_L_task.c",
-         r"..\APP\Moter_task.c", r"..\APP\Arm_R_task.c", r"..\APP\referee_usart_task.c"]
+         r"..\APP\Moter_task.c", r"..\APP\Arm_R_task.c", r"..\APP\referee_usart_task.c",
+         r"..\APP\multi_turn_store.c", r"..\APP\multi_turn_restore.c",
+         r"..\Components\Device\Src\Image_Transmission.c", r"..\BSP\Src\bsp_uart.c",
+         r"..\Components\Device\Src\Remote_Control.c", r"..\Core\Src\main.c"]
 os.makedirs(OUT, exist_ok=True)
 failed = 0
 for f in files:

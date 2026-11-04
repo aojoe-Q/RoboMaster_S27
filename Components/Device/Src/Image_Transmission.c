@@ -16,58 +16,158 @@
 #include "CRC.h"
 #include "usart.h"
 
-__attribute__((section (".AXI_SRAM"))) uint8_t Image_Trans_MultiRx_Buff[2][39];
+__attribute__((section (".AXI_SRAM"))) uint8_t Image_Trans_MultiRx_Buff[2][IMAGE_TRANS_RX_BUF_LEN];
 
 Image_Transmission_Info_TypeDef Image_Transmission_Info;
 VT13_Info_TypeDef VT13_Info;
 
 static int16_t bit8TObit16(uint8_t change_info[2]);
+static void Image_Transmission_Frame_Solve(uint8_t *Frame, uint16_t Length);
 
-void Image_Transmission_Info_Update(uint8_t *Buff){
+/* USART1 byte stream: one frame may be split over two DMA blocks, one block
+   may carry several frames. Only the USART1 interrupt touches it. */
+static uint8_t  Image_Trans_Stream[IMAGE_TRANS_STREAM_LEN];
+static uint16_t Image_Trans_Stream_Len;
+
+#define VT13_FRAME_LENGTH  21U
+
+void Image_Transmission_Info_Update(uint8_t *Buff, uint16_t Size){
+
+	uint16_t index = 0;
+
+	if(Size > IMAGE_TRANS_RX_BUF_LEN){
+		Size = IMAGE_TRANS_RX_BUF_LEN;
+	}
+	/* The kept tail is always shorter than IMAGE_TRANS_RX_LENGTH, so this
+	   only triggers if that invariant is broken: restart cleanly. */
+	if(Image_Trans_Stream_Len + Size > IMAGE_TRANS_STREAM_LEN){
+		Image_Trans_Stream_Len = 0;
+		Image_Transmission_Info.overflows++;
+	}
+	memcpy(&Image_Trans_Stream[Image_Trans_Stream_Len], Buff, Size);
+	Image_Trans_Stream_Len += Size;
+
+	while(index < Image_Trans_Stream_Len){
+
+		uint8_t *p = &Image_Trans_Stream[index];
+		uint16_t avail = Image_Trans_Stream_Len - index;
+
+		/*Check the header frame */
+		if(p[0] == 0xA5){
+
+			/* SOF, data_length (LSB first), seq, CRC8 */
+			if(avail < FrameHeader_Length){
+				break;
+			}
+			if(Verify_CRC8_Check_Sum(p,FrameHeader_Length) != true){
+				Image_Transmission_Info.crc8_errors++;
+				index++;
+				continue;
+			}
+			uint16_t frame_len = (uint16_t)(p[2]<<8 | p[1]) + FrameHeader_Length + CMDID_Length + CRC16_Length;
+			if(frame_len > IMAGE_TRANS_RX_LENGTH){
+				/* No accepted frame is longer than 39 bytes: resync */
+				Image_Transmission_Info.unknown_frames++;
+				index++;
+				continue;
+			}
+			if(avail < frame_len){
+				break;    /* the rest arrives with the next DMA block */
+			}
+			if(Verify_CRC16_Check_Sum(p,frame_len) != true){
+				Image_Transmission_Info.crc16_errors++;
+				index++;
+				continue;
+			}
+			Image_Transmission_Frame_Solve(p,frame_len);
+			index += frame_len;
+
+		}else if(p[0] == 0xA9){
+
+			if(avail < 2){
+				break;
+			}
+			if(p[1] != 0x53){
+				Image_Transmission_Info.resync_bytes++;
+				index++;
+				continue;
+			}
+			if(avail < VT13_FRAME_LENGTH){
+				break;
+			}
+			if(Verify_CRC16_Check_Sum(p,VT13_FRAME_LENGTH) != true){
+				Image_Transmission_Info.crc16_errors++;
+				index++;
+				continue;
+			}
+			VT13_Info_Update(p,&VT13_Info);
+			index += VT13_FRAME_LENGTH;
+
+		}else{
+			Image_Transmission_Info.resync_bytes++;
+			index++;
+		}
+	}
+
+	/* Keep the unparsed tail (part of one frame) for the next block */
+	Image_Trans_Stream_Len -= index;
+	if(Image_Trans_Stream_Len > 0 && index > 0){
+		memmove(Image_Trans_Stream,&Image_Trans_Stream[index],Image_Trans_Stream_Len);
+	}
+}
+
+/* One frame that passed CRC8 and CRC16. Accept it only if cmd_id and length
+   match: a frame of the right length with another cmd_id is not 0x0302. */
+static void Image_Transmission_Frame_Solve(uint8_t *Frame, uint16_t Length){
+
+	uint16_t cmd_id = (uint16_t)(Frame[FrameHeader_Length+1]<<8 | Frame[FrameHeader_Length]);
+	uint8_t *data   = &Frame[FrameHeader_Length + CMDID_Length];
 
 	Image_Transmission_Info.Index = 0;
-	Image_Transmission_Info.DataLength = 0;
-	/*Check the header frame */
- 
-	if(Buff[0] == 0xA5){
-	
-	  if(Verify_CRC8_Check_Sum(&Buff[0],5) == true){
-		
-		  Image_Transmission_Info.DataLength = (uint16_t)(Buff[Image_Transmission_Info.Index+2]<<8 | Buff[Image_Transmission_Info.Index+1]) + FrameHeader_Length + CMDID_Length + CRC16_Length;
-		 
-			if(Verify_CRC16_Check_Sum(&Buff[Image_Transmission_Info.Index],Image_Transmission_Info.DataLength) == true){
-				
-			 #ifdef CUSTOM_ROBOT_DATA_ID
-				
-				if(Image_Transmission_Info.DataLength == 39){ 
-					 for(uint8_t i = 0; i< 30; i++){
-						 Image_Transmission_Info.custom_robot_data.data[i] = Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length + i];
-					 }			
-				}
-			 #endif
-			
-			 #ifdef REMOTE_CONTROL_ID
-				
-				if(Image_Transmission_Info.DataLength == 21){					 
-					 Image_Transmission_Info.remote_control.mouse_x = bit8TObit16(&Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length]);
-					 Image_Transmission_Info.remote_control.mouse_y = bit8TObit16(&Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length + 2]);
-					 Image_Transmission_Info.remote_control.mouse_z = bit8TObit16(&Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length + 4]);
-           Image_Transmission_Info.remote_control.left_button_down  = Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length + 6];
-				   Image_Transmission_Info.remote_control.right_button_down = Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length + 7];
-					 Image_Transmission_Info.remote_control.Key.keyboard_value = bit8TObit16(&Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length + 8]);
-				}
-			 #endif
-			}
+	Image_Transmission_Info.DataLength = Length;
+
+ #ifdef CUSTOM_ROBOT_DATA_ID
+	if(cmd_id == CUSTOM_ROBOT_DATA_ID && Length == 39){
+		for(uint8_t i = 0; i< 30; i++){
+			Image_Transmission_Info.custom_robot_data.data[i] = data[i];
 		}
-		
-	}else if(Buff[0] == 0xA9){
-	
-	     if(Buff[1] == 0x53){
-			 
-				  VT13_Info_Update(Buff,&VT13_Info);
-			 
-			 }
-		}
+		Image_Transmission_Info.custom_rx_tick = HAL_GetTick();
+		Image_Transmission_Info.custom_rx_count++;
+		return;
+	}
+ #endif
+
+ #ifdef REMOTE_CONTROL_ID
+	if(cmd_id == REMOTE_CONTROL_ID && Length == 21){
+		Image_Transmission_Info.remote_control.mouse_x = bit8TObit16(&data[0]);
+		Image_Transmission_Info.remote_control.mouse_y = bit8TObit16(&data[2]);
+		Image_Transmission_Info.remote_control.mouse_z = bit8TObit16(&data[4]);
+		Image_Transmission_Info.remote_control.left_button_down  = data[6];
+		Image_Transmission_Info.remote_control.right_button_down = data[7];
+		Image_Transmission_Info.remote_control.Key.keyboard_value = bit8TObit16(&data[8]);
+		Image_Transmission_Info.remote_rx_tick = HAL_GetTick();
+		Image_Transmission_Info.remote_rx_count++;
+		return;
+	}
+ #endif
+
+	Image_Transmission_Info.unknown_frames++;
+}
+
+uint32_t Image_Transmission_Get_Custom(uint8_t data[30], uint32_t *rx_tick){
+
+	uint32_t primask = __get_PRIMASK();
+	uint32_t count;
+
+	__disable_irq();
+	memcpy(data,Image_Transmission_Info.custom_robot_data.data,30);
+	count = Image_Transmission_Info.custom_rx_count;
+	if(rx_tick != NULL){
+		*rx_tick = Image_Transmission_Info.custom_rx_tick;
+	}
+	__set_PRIMASK(primask);
+
+	return count;
 }
 
 void VT13_Info_Update(uint8_t *Buff ,VT13_Info_TypeDef *VT13_Info){

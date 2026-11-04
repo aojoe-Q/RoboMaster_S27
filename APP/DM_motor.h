@@ -61,6 +61,7 @@ typedef struct
 }Joint_Motor_t ;
 
 extern void mit_ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel,float kp, float kd, float torq);
+extern void mit_ctrl_range(hcan_t* hcan, uint16_t motor_id, float pos, float vel, float kp, float kd, float torq, float p_min, float p_max);
 extern void pos_speed_ctrl(hcan_t* hcan,uint16_t motor_id, float pos, float vel);
 extern void speed_ctrl(hcan_t* hcan,uint16_t motor_id, float _vel);
 extern void save_motor_zero(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id);

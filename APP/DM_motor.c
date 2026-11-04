@@ -121,13 +121,14 @@ void save_motor_zero(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id)
 * @details:    	通过CAN总线向电机发送MIT模式下的控制帧。
 ************************************************************************
 **/
-void mit_ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel,float kp, float kd, float torq)
+void mit_ctrl_range(hcan_t* hcan, uint16_t motor_id, float pos, float vel, float kp, float kd, float torq, float p_min, float p_max)
 {
 	uint8_t data[8];
 	uint16_t pos_tmp,vel_tmp,kp_tmp,kd_tmp,tor_tmp;
 	uint16_t id = motor_id + MIT_MODE;
 
-	pos_tmp = float_to_uint(pos,  P_MIN,  P_MAX,  16);
+
+	pos_tmp = float_to_uint(pos,  p_min,  p_max,  16);
 	vel_tmp = float_to_uint(vel,  V_MIN,  V_MAX,  12);
 	kp_tmp  = float_to_uint(kp,   KP_MIN, KP_MAX, 12);
 	kd_tmp  = float_to_uint(kd,   KD_MIN, KD_MAX, 12);
@@ -143,6 +144,11 @@ void mit_ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel,float kp, fl
 	data[7] = tor_tmp;
 	
 	canx_send_data(hcan, id, data, 8);
+}
+
+void mit_ctrl(hcan_t* hcan, uint16_t motor_id, float pos, float vel,float kp, float kd, float torq)
+{
+	mit_ctrl_range(hcan, motor_id, pos, vel, kp, kd, torq, P_MIN, P_MAX);
 }
 /**
 ************************************************************************

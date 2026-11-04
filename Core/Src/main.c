@@ -35,6 +35,7 @@
 #include "bsp_mcu.h"
 
 #include "SEGGER_SYSVIEW.h"
+#include "multi_turn_store.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -80,7 +81,10 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  /* MPU Region 1: power-loss log 0x080C0000, 256 KiB, not cacheable. Set
+     before MPU_Config() enables the MPU and before the D-Cache is on;
+     kept in a USER CODE block so CubeMX regeneration does not drop it. */
+  MT_Store_MPU_Config();
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/

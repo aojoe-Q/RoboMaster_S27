@@ -25,6 +25,14 @@
 
 #define IMAGE_TRANS_RX_LENGTH  39  //frame_header 5bytes , cmd_id 2bytes , data_max 30bytes , crc16 2bytes = bytes
 
+/* Each DMA memory block holds IMAGE_TRANS_RX_BUF_LEN bytes. NDTR is reloaded
+   with this value, so the block must be this large (double the longest frame,
+   as SBUS does), otherwise DMA writes past the block. */
+#define IMAGE_TRANS_RX_BUF_LEN (IMAGE_TRANS_RX_LENGTH*2)
+
+/* Stream reassembly: residual bytes of a split frame plus one DMA block. */
+#define IMAGE_TRANS_STREAM_LEN (IMAGE_TRANS_RX_BUF_LEN + IMAGE_TRANS_RX_LENGTH)
+
 #define FrameHeader_Length    5U   /*!< the length of frame header */
 #define CMDID_Length          2U   /*!< the length of CMD ID */
 #define CRC16_Length          2U   /*!< the length of CRC ID */
@@ -105,6 +113,20 @@ typedef struct{
 	#ifdef REMOTE_CONTROL_ID
 	  remote_control_t remote_control;
   #endif
+
+	/* Freshness, written only when a frame with matching cmd_id, length and
+	   CRC is accepted (HAL tick, USART1 interrupt). */
+	uint32_t custom_rx_tick;
+	uint32_t custom_rx_count;
+	uint32_t remote_rx_tick;
+	uint32_t remote_rx_count;
+
+	/* Diagnostics */
+	uint32_t crc8_errors;
+	uint32_t crc16_errors;
+	uint32_t resync_bytes;
+	uint32_t unknown_frames;
+	uint32_t overflows;
 }Image_Transmission_Info_TypeDef;
 
 
@@ -158,11 +180,15 @@ typedef struct{
 }VT13_Info_TypeDef;
 
 /* Exported variables ---------------------------------------------------------*/
-extern uint8_t Image_Trans_MultiRx_Buff[2][39];
+extern uint8_t Image_Trans_MultiRx_Buff[2][IMAGE_TRANS_RX_BUF_LEN];
 extern VT13_Info_TypeDef VT13_Info;
 extern Image_Transmission_Info_TypeDef Image_Transmission_Info;
 extern void Robot_Data_to_Custom_(uint8_t *Data);
-extern void Image_Transmission_Info_Update(uint8_t *Buff);
+/* Size: bytes the DMA wrote into Buff (from the RX event callback). */
+extern void Image_Transmission_Info_Update(uint8_t *Buff, uint16_t Size);
+/* Copy the last accepted 0x0302 payload. Returns its accept count (0 = none
+   yet). Masks interrupts for the copy; task context. */
+extern uint32_t Image_Transmission_Get_Custom(uint8_t data[30], uint32_t *rx_tick);
 extern void VT13_Info_Update(uint8_t *Data ,VT13_Info_TypeDef *VT13_Info);
 
 #endif

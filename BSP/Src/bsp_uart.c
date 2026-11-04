@@ -93,8 +93,11 @@ static void USART_RxDMA_MultiBuffer_Init(UART_HandleTypeDef *huart, uint32_t *Ds
   /* Configure DMA Stream destination address */
   ((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->M1AR = (uint32_t)SecondMemAddress;
 
-  /* Configure the length of data to be transferred from source to destination */
-  ((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->NDTR = DataLength;
+  /* Configure the length of data to be transferred from source to destination.
+     Each memory block holds DataLength*2 bytes; NDTR, RxXferSize and the
+     reload in the RX handlers all use that value, so Size (= RxXferSize -
+     NDTR) is the byte count of the current block from the first frame on. */
+  ((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->NDTR = DataLength * 2;
 
   /* Enable double memory buffer */
   SET_BIT(((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->CR, DMA_SxCR_DBM);
@@ -181,16 +184,17 @@ static void USER_USART1_RxHandler(UART_HandleTypeDef *huart,uint16_t Size){
 					((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->CR |= DMA_SxCR_CT;
 					
 				  /* Juge whether size is equal to the length of the received data */
-					if(Size > 10)
+					/* Stream parser: a split frame may arrive in pieces shorter than 10 */
+					if(Size > 0 && Size <= IMAGE_TRANS_RX_BUF_LEN)
 					{
 					
 						/* Memory 0 data update to remote_ctrl*/
-						Image_Transmission_Info_Update(Image_Trans_MultiRx_Buff[0]);
+						Image_Transmission_Info_Update(Image_Trans_MultiRx_Buff[0],Size);
 					
 					}
 					
 					/* Reset the receive count */
-				  __HAL_DMA_SET_COUNTER(huart->hdmarx,IMAGE_TRANS_RX_LENGTH*2);
+				  __HAL_DMA_SET_COUNTER(huart->hdmarx,IMAGE_TRANS_RX_BUF_LEN);
 
 			}
 			/* Current memory buffer used is Memory 1 */
@@ -201,13 +205,13 @@ static void USER_USART1_RxHandler(UART_HandleTypeDef *huart,uint16_t Size){
 				  /* Switch Memory 1 to Memory 0*/
 					((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->CR &= ~(DMA_SxCR_CT);
 				
-					if(Size > 10)
+					if(Size > 0 && Size <= IMAGE_TRANS_RX_BUF_LEN)
 					{
 						/* Memory 1 to data update to remote_ctrl*/
-						Image_Transmission_Info_Update(Image_Trans_MultiRx_Buff[1]);
+						Image_Transmission_Info_Update(Image_Trans_MultiRx_Buff[1],Size);
 					}
 				  /* Reset the receive count */
-					__HAL_DMA_SET_COUNTER(huart->hdmarx,IMAGE_TRANS_RX_LENGTH*2);
+					__HAL_DMA_SET_COUNTER(huart->hdmarx,IMAGE_TRANS_RX_BUF_LEN);
 			}
 #else
   

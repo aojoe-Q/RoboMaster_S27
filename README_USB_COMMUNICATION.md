@@ -23,7 +23,7 @@
 | [tools/selftest](tools/selftest) | 主机自测、发送频率、ARMCLANG 检查 |
 
 数据路径：USB RX → 环形缓冲 → Arm_USB_Task → PC 目标缓存 → Arm_PC_Control → 电机发送任务。
-STATE 的反馈来自 CAN 电机反馈，不是“命令已执行”的证明。
+STATE 的反馈来自 CAN 电机反馈，不是“命令已执行”的证明。STATE 位置与 POSITION_CMD 目标都是逻辑坐标 P = p + b（见 APP/multi_turn_restore.h）；`MT_RESTORE_ENABLE=0` 时 b=0，与原始电机角度相同。
 
 ## 2. 帧格式和单位
 
