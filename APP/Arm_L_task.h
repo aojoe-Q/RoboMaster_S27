@@ -26,8 +26,8 @@
 #define J5_Min_position -1.29562798f	 
 #define J6_Max_position 2.22337666f		
 #define J6_Min_position -2.25160637f 
-#define Grip_Max_position 0.7f    	 
-#define Grip_Min_position 0.0f		
+#define Grip_Max_position 0.0f    	 
+#define Grip_Min_position -12.0f		
 /*������λ*/
 /* J1/J2 collision zone: while measured J2 is below J1_J2_ZONE_J2_MAX the
    J1 lower limit tightens to J1_J2_ZONE_J1_MIN. RC mode only; PC mode
@@ -194,6 +194,7 @@ typedef  struct
 		fp32 Key_Control_Value;
     fp32 Kp;
     fp32 Kd;
+    fp32 torque;
 }DM_contorl_t;
 
 typedef  struct

@@ -39,7 +39,7 @@ void Moter_Task(void const * argument)
 		else
 		{
 			
-			mit_ctrl(&hfdcan1, 0x07, ArmData.Grip.send_set, 0, ArmData.Grip.Kp, ArmData.Grip.Kd, 0);  //МазІ	
+			mit_ctrl(&hfdcan1, 0x07, ArmData.Grip.send_set, 0, ArmData.Grip.Kp, ArmData.Grip.Kd, ArmData.Grip.torque);  //МазІ	
 		}
 		osDelay(5);
 		
