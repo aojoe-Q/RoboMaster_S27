@@ -19,6 +19,7 @@
 #include "bsp_pwm.h"
 #include "bsp_uart.h"
 #include "bsp_adc.h"
+#include "bsp_led.h"
 #include "bmi088.h"
 #include "usb_device.h"
 
@@ -33,6 +34,7 @@ void MCU_Init(void)
   BSP_FDCAN_Init();
   BSP_USART_Init();
 	BSP_ADC_Init();
+	BSP_LED_Init();          /* PA7 / SPI6：板载 2812 LED，上电熄灭 */
 	MX_USB_DEVICE_Init();
   /* ----------------------- Device Init ----------------------- */
   BMI088_Init();

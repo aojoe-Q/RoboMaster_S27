@@ -1,3 +1,6 @@
+/* 模块职责：右臂（Arm_R）关节控制的早期版本：DM 关节位置斜坡、上电姿态对齐与 MIT 指令发送。 */
+/* 当前状态：整个文件已被逐行注释，编译单元为空，不参与任何构建；保留仅作历史参考。 */
+/* 历史依赖：FDCAN1 上的达妙关节（0x01..0x07）、VT13 遥控器、ramp_function_source_t 斜坡发生器。 */
 //#include "Arm_R_task.h"
 //#include "DM_motor.h"
 //#include "DJI_motor.h"
@@ -9,14 +12,14 @@
 //#include "LK_motor.h"
 
 ///**
-// * @brief �������ź�Ӧ���������Ƶĺ궨�塣
+// * @brief 对输入信号应用死区限制的宏定义。
 // *
-// * ��������źŵľ���ֵ���ڸ�����������ֵ��dealine����������źŵ��������źţ�
-// * ��������ź�Ϊ�㡣���ڷ�ֹС���ȵ����벨����ϵͳ��������Ҫ����Ӧ��
+// * 如果输入信号的绝对值大于给定的死区阈值（dealine），则输出信号等于输入信号，
+// * 否则输出信号为零。用于防止小幅度的输入波动对系统产生不必要的响应。
 // *
-// * @param input �����źš�
-// * @param output ����źţ���������������Ľ����
-// * @param dealine ������ֵ��
+// * @param input 输入信号。
+// * @param output 输出信号，经过死区处理后的结果。
+// * @param dealine 死区阈值。
 // */
 //#define rc_deadband_limit(input, output, dealine)    \
 //  {                                                  \
@@ -34,7 +37,8 @@
 //  extern FDCAN_HandleTypeDef hfdcan2;
 //  extern FDCAN_HandleTypeDef hfdcan3;
 
-//  ramp_function_source_t J1_position_set;      //DM_J6248p  (��ʱ��8009)
+// 各关节目标位置斜坡发生器；注释里标明了对应的达妙电机型号（J1 暂用 DM8009）。
+//  ramp_function_source_t J1_position_set;      //DM_J6248p  (暂时：8009)
 //  ramp_function_source_t J2_position_set;	   //DM_J6248p
 //  ramp_function_source_t J3_position_set;      //DM_4340p 
 //  ramp_function_source_t J4_position_set;      //DM_4310P
@@ -43,7 +47,8 @@
 //  ramp_function_source_t grip_position_set1;   //DM_4310
 //  ramp_function_source_t grip_position_set2;
 //  
-//  /*��ʼ��̬*/
+// 上电初始姿态（各关节零位偏置）与关节反馈数组；ArmData_t 汇总各关节控制量。
+//  /*初始姿态*/
 //  float J1_initial_posture = 0.0f,J2_initial_posture = 0.0f,J3_initial_posture = 0.0f,J4_initial_posture = 0.0f,J5_initial_posture = 0.0f,J6_initial_posture = 0.0f,grip_initial_posture = 0.0f;
 //  
 //  joint_motor_measure_t joint_R_motor[6];
@@ -56,6 +61,7 @@
 //  float Init_position;
 //  float Last_position;
 //  
+/* 任务主体（历史）：初始化后以 2 ms 周期向 FDCAN1 的 0x03 号电机发送 MIT 指令（前四项为 0，末尾力矩项非零），仅用于联调。 */
 //void Arm_R_task(void)
 //{
 //	Arm_R_Init();
@@ -63,13 +69,14 @@
 //	{
 //		mit_ctrl(&hfdcan1, 0X03 ,0, 0, 0, 0, 1);
 //		osDelay(2);
-////		CAN_cmd_measure();     //����h7��c���˫��ͨ��
+////		CAN_cmd_measure();     //测试h7与c板的双板通信
 //	}
 //}
 //	
 //  
 
-///************************* ��ʼ�� *************************/
+/* 初始化（历史）：读取关节反馈作为初始位置，等待 3 s 后按 0.001 步进把目标平滑拉回零位。 */
+///************************* 初始化 *************************/
 //void Arm_R_Init(void)
 //{
 //	ArmData.J1.send_set=joint_R_motor[0].position;
@@ -110,6 +117,7 @@
 //arm_data_ramp_init(&J6_position_set,1,ArmData.J6.Initial_Total_position);
 
 
+// 位置斜坡收敛循环：每个周期逼近一次零点，全部关节斜坡到位后清除初始化标志。
 //do{	
 //	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
 //	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
@@ -139,7 +147,8 @@
 //}while(J1_J2_J3_J4_J5_J6_J7_init_flag);
 
 
-//	/*��������*/
+// 初始化收尾：清空遥控/按键累计量与斜坡状态，避免首帧控制量跳变。
+//	/*发送清零*/
 //	ArmData.J1.RC_Sum_Value = 0;
 //	ArmData.J2.RC_Sum_Value = 0;
 //	ArmData.J3.RC_Sum_Value = 0;

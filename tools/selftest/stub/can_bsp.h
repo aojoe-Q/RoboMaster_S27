@@ -7,6 +7,7 @@
 typedef struct
 {
     uint32_t motorid;
+    uint8_t status;
     float    position;
     float    velocity;
     float    current;

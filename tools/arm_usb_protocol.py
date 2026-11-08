@@ -36,9 +36,10 @@ MSG_STOP = 0x04
 MSG_HEARTBEAT = 0x05
 MSG_ACK = 0x06
 MSG_FAULT = 0x07
+MSG_DIAGNOSTIC = 0x08
 
 MSG_NAMES = {
-    MSG_STATE: "STATE", MSG_POSITION_CMD: "POSITION_CMD", MSG_ENABLE: "ENABLE",
+    MSG_DIAGNOSTIC: "DIAGNOSTIC", MSG_STATE: "STATE", MSG_POSITION_CMD: "POSITION_CMD", MSG_ENABLE: "ENABLE",
     MSG_STOP: "STOP", MSG_HEARTBEAT: "HEARTBEAT", MSG_ACK: "ACK", MSG_FAULT: "FAULT",
 }
 
@@ -49,6 +50,8 @@ FAULT_LINK_TIMEOUT = 0x0001
 FAULT_USB_DISCONNECT = 0x0002
 FAULT_RX_OVERFLOW = 0x0004
 FAULT_FEEDBACK_LOST = 0x0008
+FAULT_CAN_BUS = 0x0010
+FAULT_DM_ENABLE = 0x0020
 
 ACK_OK = 0x00
 ACK_BAD_LENGTH = 0x01
@@ -112,7 +115,8 @@ def fault_names(code: int) -> str:
     names = [n for bit, n in ((FAULT_LINK_TIMEOUT, "LINK_TIMEOUT"),
                               (FAULT_USB_DISCONNECT, "USB_DISCONNECT"),
                               (FAULT_RX_OVERFLOW, "RX_OVERFLOW"),
-                              (FAULT_FEEDBACK_LOST, "FEEDBACK_LOST")) if code & bit]
+                              (FAULT_FEEDBACK_LOST, "FEEDBACK_LOST"),
+                              (FAULT_CAN_BUS, "CAN_BUS"), (FAULT_DM_ENABLE, "DM_ENABLE")) if code & bit]
     return "|".join(names) if names else "none"
 
 
@@ -265,7 +269,9 @@ def encode_position_cmd(positions_rad: Sequence[float], valid_time_ms: int = 100
                         velocity_limit_rad_s: Optional[Sequence[float]] = None) -> bytes:
     if len(positions_rad) != JOINT_NUM:
         raise ProtocolError("need %d joint positions, got %d" % (JOINT_NUM, len(positions_rad)))
-    limits = velocity_limit_rad_s or [0.0] * JOINT_NUM
+    limits = [0.0] * JOINT_NUM if velocity_limit_rad_s is None else velocity_limit_rad_s
+    if len(limits) != JOINT_NUM or any(v < 0 for v in limits):
+        raise ProtocolError("need seven nonnegative velocity limits; 0 uses firmware default")
     return struct.pack(_POS_CMD_FMT, command_timestamp_ms & 0xFFFFFFFF, valid_time_ms,
                        1 if enable else 0, 0,
                        *[rad_to_urad(p) for p in positions_rad],
@@ -363,7 +369,28 @@ class HostEncoder:
         return self.frame(MSG_HEARTBEAT)
 
     def position(self, positions_rad: Sequence[float], valid_time_ms: int = 100,
-                 enable: bool = True) -> bytes:
+                 enable: bool = True, velocity_limit_rad_s: Optional[Sequence[float]] = None) -> bytes:
         ts = self._cmd_timestamp()
         return self.frame(MSG_POSITION_CMD,
-                          encode_position_cmd(positions_rad, valid_time_ms, enable, ts), ts)
+                          encode_position_cmd(positions_rad, valid_time_ms, enable, ts, velocity_limit_rad_s), ts)
+
+
+def decode_diagnostic(payload: bytes) -> dict:
+    """Health extension v1; counters wrap modulo 2**32 and latch until reset."""
+    if len(payload) < 6:
+        raise ProtocolError("short diagnostic header")
+    schema, page, timestamp_ms = struct.unpack_from("<BBI", payload)
+    if schema != 1 or page not in (0, 1):
+        raise ProtocolError("unsupported diagnostic schema/page")
+    fmt, count = ("<6I4B", 3) if page == 0 else ("<5I2B", 7)
+    names = (("tx_drop", "rx_overflow", "rx_invalid", "busoff_count", "flags",
+              "recovery_count", "tec", "rec", "tx_free_min", "blocked") if page == 0 else
+             ("invalid_command", "tx_drop", "offline_skip", "fifo_defer",
+              "first_enable_feedback_ms", "enable_state", "attempts"))
+    size = struct.calcsize(fmt)
+    if len(payload) != 6 + count * size:
+        raise ProtocolError("bad diagnostic page size")
+    return {"schema": schema, "page": page, "timestamp_ms": timestamp_ms,
+            "buses" if page == 0 else "joints": [
+                dict(zip(names, struct.unpack_from(fmt, payload, 6 + i * size)))
+                for i in range(count)]}

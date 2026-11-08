@@ -46,7 +46,7 @@ typedef struct {
 extern  FDCAN_TxFrame_TypeDef   FDCAN1_TxFrame;
 extern  FDCAN_TxFrame_TypeDef   FDCAN2_TxFrame;
 extern  FDCAN_TxFrame_TypeDef   FDCAN3_TxFrame;
-extern void  USER_FDCAN_AddMessageToTxFifoQ(FDCAN_TxFrame_TypeDef *FDCAN_TxFrame);
+extern HAL_StatusTypeDef USER_FDCAN_AddMessageToTxFifoQ(FDCAN_TxFrame_TypeDef *FDCAN_TxFrame);
 extern void BSP_FDCAN_Init(void);
 
 	   

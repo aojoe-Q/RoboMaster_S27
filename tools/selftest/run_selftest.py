@@ -29,7 +29,7 @@ MINIPC_INC = os.path.join(PROJECT, "Components", "Device", "Inc")
 STUB = os.path.join(HERE, "stub")
 BUILD = os.environ.get("ARM_SELFTEST_BUILD") or os.path.join(HERE, "build")
 FIRMWARE = ("Arm_USB_task.c", "Arm_USB_task.h", "arm_usb_protocol.c",
-            "arm_usb_protocol.h", "ring_buffer.c", "ring_buffer.h")
+            "arm_usb_protocol.h", "ring_buffer.c", "ring_buffer.h", "arm_motion.h", "arm_output.h", "can_health.h", "motor_encoding.h")
 
 sys.path.insert(0, TOOLS)
 import arm_usb_protocol as proto  # noqa: E402
@@ -103,7 +103,7 @@ def build(compiler):
 def write_host_frames():
     clock = [100.0]
     enc = proto.HostEncoder(clock=lambda: clock[0])
-    ok = [0.10, 0.50, 0.60, -1.0, 0.20, -0.30, 0.35]
+    ok = [0.10, 0.50, 0.60, -1.0, 0.20, -0.30, -0.35]
     bad = list(ok)
     bad[4] = 1.30                                   # J5 max is 1.23497334
 
@@ -209,6 +209,20 @@ def verify_cross(ok_targets):
           "resent commands rejected")
 
 
+def verify_diagnostics():
+    with open(os.path.join(BUILD, "diagnostic.bin"), "rb") as f:
+        frames = proto.decode_frames(f.read())
+    pages = [proto.decode_diagnostic(fr.payload) for fr in frames if fr.type == proto.MSG_DIAGNOSTIC]
+    check([p["page"] for p in pages] == [0, 1], "both diagnostic pages")
+    bus = pages[0]["buses"][0]
+    check(bus["tx_drop"] == 0x12345678 and bus["rx_overflow"] == 9 and
+          bus["busoff_count"] == 3 and bus["tec"] == 127, "diagnostic bus fields")
+    joint = pages[1]["joints"][6]
+    check(joint["invalid_command"] == 42 and joint["enable_state"] == 3 and
+          joint["attempts"] == 50, "diagnostic joint fields")
+    print("diagnostic pages: firmware/Python fields match, including 32-bit counters")
+
+
 def main():
     try:
         check(proto.crc16(b"123456789") == 0x29B1, "python crc16 check value")
@@ -220,6 +234,7 @@ def main():
         run(exe)
         verify_state_frames()
         verify_cross(ok)
+        verify_diagnostics()
     except Failure as exc:
         print("SELFTEST FAILED: %s" % exc)
         return 1

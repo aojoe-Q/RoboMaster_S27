@@ -680,6 +680,11 @@
               <FileType>1</FileType>
               <FilePath>..\BSP\Src\bsp_dwt.c</FilePath>
             </File>
+            <File>
+              <FileName>bsp_led.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\BSP\Src\bsp_led.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

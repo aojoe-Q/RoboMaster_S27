@@ -1,6 +1,7 @@
+#include <math.h>
 #include "HT_motor.h"
 
-extern int float_to_uint(float x_float, float x_min, float x_max, int bits);
+#include "motor_encoding.h"
 
 extern FDCAN_HandleTypeDef hfdcan1;
 extern FDCAN_HandleTypeDef hfdcan2;
@@ -77,6 +78,8 @@ static void CanTransmit_Left(uint8_t *buf, uint8_t len,uint32_t motor_id)
 
 void CanComm_SendControlPara_Left(float f_p, float f_v, float f_kp, float f_kd, float f_t,uint32_t motor_id)
 {
+    if (!isfinite(f_p) || !isfinite(f_v) || !isfinite(f_kp) ||
+        !isfinite(f_kd) || !isfinite(f_t)) return;
     uint16_t p, v, kp, kd, t;
     uint8_t buf[8];
     
@@ -86,11 +89,11 @@ void CanComm_SendControlPara_Left(float f_p, float f_v, float f_kp, float f_kd, 
     LIMIT_MIN_MAX(f_kd, KD_MIN, KD_MAX);
     LIMIT_MIN_MAX(f_t,  T_MIN,  T_MAX);
     
-    p = float_to_uint(f_p,   P_MIN,  P_MAX,  16);            
-    v = float_to_uint(f_v,   V_MIN,  V_MAX,  12);
-    kp = float_to_uint(f_kp, KP_MIN, KP_MAX, 12);
-    kd = float_to_uint(f_kd, KD_MIN, KD_MAX, 12);
-    t = float_to_uint(f_t,   T_MIN,  T_MAX,  12);
+    p = float_to_uint_clamped(f_p,   P_MIN,  P_MAX,  16);
+    v = float_to_uint_clamped(f_v,   V_MIN,  V_MAX,  12);
+    kp = float_to_uint_clamped(f_kp, KP_MIN, KP_MAX, 12);
+    kd = float_to_uint_clamped(f_kd, KD_MIN, KD_MAX, 12);
+    t = float_to_uint_clamped(f_t,   T_MIN,  T_MAX,  12);
     
     buf[0] = p>>8;
     buf[1] = p&0xFF;
@@ -105,6 +108,8 @@ void CanComm_SendControlPara_Left(float f_p, float f_v, float f_kp, float f_kd, 
 }
 void CanComm_SendControlPara_Right(float f_p, float f_v, float f_kp, float f_kd, float f_t,uint32_t motor_id)
 {
+    if (!isfinite(f_p) || !isfinite(f_v) || !isfinite(f_kp) ||
+        !isfinite(f_kd) || !isfinite(f_t)) return;
     uint16_t p, v, kp, kd, t;
     uint8_t buf[8];
     
@@ -114,11 +119,11 @@ void CanComm_SendControlPara_Right(float f_p, float f_v, float f_kp, float f_kd,
     LIMIT_MIN_MAX(f_kd, KD_MIN, KD_MAX);
     LIMIT_MIN_MAX(f_t,  T_MIN,  T_MAX);
     
-    p = float_to_uint(f_p,   P_MIN,  P_MAX,  16);            
-    v = float_to_uint(f_v,   V_MIN,  V_MAX,  12);
-    kp = float_to_uint(f_kp, KP_MIN, KP_MAX, 12);
-    kd = float_to_uint(f_kd, KD_MIN, KD_MAX, 12);
-    t = float_to_uint(f_t,   T_MIN,  T_MAX,  12);
+    p = float_to_uint_clamped(f_p,   P_MIN,  P_MAX,  16);
+    v = float_to_uint_clamped(f_v,   V_MIN,  V_MAX,  12);
+    kp = float_to_uint_clamped(f_kp, KP_MIN, KP_MAX, 12);
+    kd = float_to_uint_clamped(f_kd, KD_MIN, KD_MAX, 12);
+    t = float_to_uint_clamped(f_t,   T_MIN,  T_MAX,  12);
     
     buf[0] = p>>8;
     buf[1] = p&0xFF;

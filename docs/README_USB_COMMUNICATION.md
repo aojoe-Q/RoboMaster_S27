@@ -1,7 +1,7 @@
 # DM-MC02 机械臂 USB CDC 协议与实现说明（v2）
 
-文档修订：2026-11-02。适用：`S27_TEST_2` 固件与 `ros_test_8/src/dm_mc02_hardware`。
-协议版本仍为 `0x02`；本次仅整理文档，不表示固件升级或台架验收通过。
+文档修订：2026-11-07。适用：`S27_TEST_2` 固件与 `ros_test_8/src/dm_mc02_hardware`。
+协议版本仍为 `0x02`；本次固件评审修改、诊断扩展及验证范围见 [实施记录](docs/REVIEW_IMPLEMENTATION_20261107.md)。未完成台架验收。
 
 本文用于协议开发、故障定位和测试；Ubuntu 操作顺序见 [实机联调手册](../ros_test_8/UBUNTU_SETUP.md)。
 以下“当前实现”按本地源码核对。代码修改后必须重新核对本文；建议和待办不代表已实现能力。
@@ -62,6 +62,7 @@ STATE 的反馈来自 CAN 电机反馈，不是“命令已执行”的证明。
 | 0x05 HEARTBEAT | PC→MCU | 0 | 维持链路活动，不延长位置命令有效期 |
 | 0x06 ACK | MCU→PC | 4 | 请求类型、序号、结果 |
 | 0x07 FAULT | MCU→PC | 4 | 故障位变化通知；持续状态以 STATE 为准 |
+| 0x08 DIAGNOSTIC | MCU→PC | 90/160 | 每 500 ms 交替发送总线/关节健康页，布局见实施记录 |
 
 ### 3.1 POSITION_CMD
 
@@ -74,7 +75,7 @@ STATE 的反馈来自 CAN 电机反馈，不是“命令已执行”的证明。
 | 6 | u8 | enable；发送方只使用 0/1 |
 | 7 | u8 | reserved，填 0 |
 | 8 | i32[7] | position |
-| 36 | i32[7] | velocity_limit，保留，全部填 0 |
+| 36 | i32[7] | velocity_limit，μrad/s：0 用固件默认；正值只收紧；负值 BAD_VALUE |
 
 当前固件按以下规则处理：
 
@@ -90,7 +91,7 @@ STATE 的反馈来自 CAN 电机反馈，不是“命令已执行”的证明。
 
 ENABLE：`enable u8, reserved u8[3]`。保留字段填 0。
 
-- ENABLE(1)：要求当前会话有效、arm_mode=10、Arm_L_Init 已完成、全部 7 个关节反馈年龄 ≤100 ms。
+- ENABLE(1)：要求当前会话有效、arm_mode=10、Arm_L_Init 已完成、全部 7 个关节反馈年龄 ≤100 ms、状态为已使能且输出使能确认完成，无总线禁止输出状态。
 - 成功后清除故障位、清除旧目标和命令时间基线；等待新 POSITION_CMD。
 - ENABLE(0) 与 STOP 均撤防、清除目标有效位，但不清除已锁存的故障位。
 - HEARTBEAT 只刷新链路活动；已有位置命令仍会到期。
@@ -104,8 +105,8 @@ ENABLE：`enable u8, reserved u8[3]`。保留字段填 0。
 | 4 | u8 | arm_mode，PC 模式为 10 |
 | 5 | u8 | system_state，见第 4 节 |
 | 6 | u16 | fault_code，位掩码 |
-| 8 | u8 | flags，bit0=Arm_L_Init 完成 |
-| 9 | u8 | feedback_valid，bit i=该电机反馈年龄 ≤100 ms |
+| 8 | u8 | flags：bit0=初始化完成，bit1=TX失败，bit2=CAN异常，bit3=CAN RX溢出，bit4=DM/启动失败 |
+| 9 | u8 | feedback_valid，bit i=该电机反馈年龄 ≤100 ms 且反馈状态为已使能 |
 | 10 | u16 | reserved |
 | 12 | u16[7] | feedback_age_ms，0xFFFF=从未收到，最大正常值饱和到 0xFFFE |
 | 26 | i32[7] | position，电机反馈 |
@@ -145,6 +146,8 @@ FAULT：`fault_code u16, system_state u8, reserved u8`。
 | 0x0002 | USB_DISCONNECT | 已使能时会话结束、替换或挂起，撤防 |
 | 0x0004 | RX_OVERFLOW | 接收缓冲丢字节，记录故障；当前不单独撤防 |
 | 0x0008 | FEEDBACK_LOST | 已使能时任一 CAN 反馈超时，撤防 |
+| 0x0010 | CAN_BUS | 总线恢复中或故障禁止输出，撤防 |
+| 0x0020 | DM_ENABLE | 关节初始化/夹爪标零/回零失败，保持未就绪 |
 
 故障位累积到成功 ENABLE(1)，或固件重新初始化。并非任意非零 fault_code 都等于 system_state=FAULT，尤其 RX_OVERFLOW。
 
@@ -237,7 +240,9 @@ joint8_m = grip_q_close_m + t * (grip_q_open_m - grip_q_close_m)
 | 串口 | 当前无完整自动重连流程 | 重连须重新建链和使能，禁止旧命令恢复 |
 
 单帧步长限制由 ROS 插件执行，默认每关节 0.01 rad/20 ms（约 0.5 rad/s 的平均步长约束），不是固件速度/加速度规划。
-Moter_Task 每轮等待合计约 17 ms，各电机发送错开，单电机约 59 Hz 以下；100 Hz STATE 不等于 100 Hz 同步执行。
+Moter_Task 现在按 4 ms 绝对节拍读取完整命令快照，七帧之间无任务延时，软件目标 250 Hz；FIFO 压力时延期并计数。控制计算为 125 Hz、STATE 为 100 Hz，实际帧率和关节相位差需总线分析仪验证。
+
+PC 正常目标经速度/加速度限制，当前默认及硬速度上限为 0.5 rad/s，加速度上限 1.0 rad/s²。主机降低巡航速度上限时按加速度约束制动；STOP/失联的保持动作属于独立故障处理。详见实施记录，参数需要实机标定。
 不同电机型号的 P/V/T 量程仍需核对；当前公共力矩量程为 ±54 N·m。
 
 ## 7. 测试与证据

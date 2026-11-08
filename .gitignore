@@ -55,3 +55,7 @@ tools/selftest/build/
 
 # 链接脚本是手写的，不能丢（*.sct 规则会误伤）
 !MDK-ARM/COD_H7_Template/COD_H7_Template.sct
+
+# clangd / 编译数据库（本机生成，不入库）
+.cache/
+compile_commands.json

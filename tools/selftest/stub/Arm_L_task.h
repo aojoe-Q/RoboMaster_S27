@@ -20,8 +20,8 @@ typedef float fp32;
 #define J5_Min_position -1.29562798f
 #define J6_Max_position 2.22337666f
 #define J6_Min_position -2.25160637f
-#define Grip_Max_position 0.7f
-#define Grip_Min_position 0.0f
+#define Grip_Max_position 0.0f
+#define Grip_Min_position -12.0f
 
 typedef struct
 {

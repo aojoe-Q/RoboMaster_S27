@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import sys
 import time
@@ -123,6 +124,7 @@ def main(argv=None) -> int:
     ap.add_argument("--port", help="serial port, e.g. COM7")
     ap.add_argument("--list", action="store_true", help="list serial ports and exit")
     ap.add_argument("--csv", metavar="PATH", help="write every STATE frame to CSV")
+    ap.add_argument("--health-jsonl", metavar="PATH", help="write diagnostic pages as JSON lines")
     ap.add_argument("--duration", type=float, help="stop after N seconds")
     ap.add_argument("--display-hz", type=float, default=5.0, help="console refresh rate")
     ap.add_argument("--verbose", action="store_true", help="also print target, velocity, torque")
@@ -137,6 +139,7 @@ def main(argv=None) -> int:
     stream = proto.FrameStream()
     writer = None
     csv_file = None
+    health_file = open(args.health_jsonl, "w", encoding="utf-8") if args.health_jsonl else None
     if args.csv:
         csv_file = open(args.csv, "w", newline="")
         writer = csv.writer(csv_file)
@@ -178,6 +181,12 @@ def main(argv=None) -> int:
                     a = proto.decode_ack(frame.payload)
                     print("ACK  %s seq=%d -> %s" % (proto.MSG_NAMES.get(a.acked_type, a.acked_type),
                                                    a.acked_sequence, a.result_name))
+                elif frame.type == proto.MSG_DIAGNOSTIC:
+                    health = proto.decode_diagnostic(frame.payload)
+                    print("CAN HEALTH", health)
+                    if health_file:
+                        health_file.write(json.dumps({"host_time": time.time(), **health}) + "\n")
+                        health_file.flush()
                 elif frame.type == proto.MSG_FAULT:
                     f = proto.decode_fault(frame.payload)
                     print("FAULT %s, pc=%s" % (proto.fault_names(f.fault_code),
@@ -188,6 +197,8 @@ def main(argv=None) -> int:
         port.close()
         if csv_file:
             csv_file.close()
+        if health_file:
+            health_file.close()
 
     elapsed = max(time.monotonic() - start, 1e-6)
     print("%d STATE frames in %.1f s (%.1f/s), crc errors %d, resync bytes %d"

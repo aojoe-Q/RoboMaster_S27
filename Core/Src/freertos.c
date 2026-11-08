@@ -31,6 +31,7 @@
 #include "referee_usart_task.h"
 #include "can_bsp.h"
 #include "Arm_USB_task.h"
+#include "bsp_led.h"
 
 /* USER CODE END Includes */
 
@@ -83,10 +84,14 @@ osStaticThreadDef_t App_Referee_TaskControlBlock;
 osThreadId App_RC_TaskHandle;
 uint32_t App_RC_TaskBuffer[ 512 ];
 osStaticThreadDef_t App_RC_TaskControlBlock;
+osThreadId App_Led_TaskHandle;
+uint32_t App_Led_TaskBuffer[ 512 ];
+osStaticThreadDef_t App_Led_TaskControlBlock;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 void referee_usart_Task(void const * argument);
+void LED_Task(void const * argument);
 
 /* USER CODE END FunctionPrototypes */
 
@@ -150,7 +155,7 @@ void MX_FREERTOS_Init(void) {
   Start_Control_TaskHandle = osThreadCreate(osThread(Start_Control_Task), NULL);
 
   /* definition and creation of Start_CAN_Task */
-  osThreadStaticDef(Start_CAN_Task, CAN_Task, osPriorityNormal, 0, 2048, Start_CAN_TaskBuffer, &Start_CAN_TaskControlBlock);
+  osThreadStaticDef(Start_CAN_Task, CAN_Task, osPriorityHigh, 0, 2048, Start_CAN_TaskBuffer, &Start_CAN_TaskControlBlock);
   Start_CAN_TaskHandle = osThreadCreate(osThread(Start_CAN_Task), NULL);
 
   /* definition and creation of Start_Detect_Task */
@@ -179,6 +184,11 @@ void MX_FREERTOS_Init(void) {
   osThreadStaticDef(App_Arm_USB_Task, Arm_USB_Task, osPriorityBelowNormal, 0, 1024,
                     App_Arm_USB_TaskBuffer, &App_Arm_USB_TaskControlBlock);
   App_Arm_USB_TaskHandle = osThreadCreate(osThread(App_Arm_USB_Task), NULL);
+  /* 板载 2812 LED（PA7/SPI6）：20ms 一拍呼吸灯，最低优先级，不干扰控制与通信 */
+  osThreadStaticDef(App_Led_Task, LED_Task, osPriorityLow, 0, 512,
+                    App_Led_TaskBuffer, &App_Led_TaskControlBlock);
+  App_Led_TaskHandle = osThreadCreate(osThread(App_Led_Task), NULL);
+
   /* USER CODE END RTOS_THREADS */
 
 }
@@ -198,7 +208,7 @@ __weak void INS_Task(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osDelay(100);
   }
   /* USER CODE END INS_Task */
 }
@@ -216,7 +226,7 @@ __weak void Control_Task(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osDelay(100);
   }
   /* USER CODE END Control_Task */
 }
@@ -234,7 +244,7 @@ __weak void CAN_Task(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osDelay(100);
   }
   /* USER CODE END CAN_Task */
 }
@@ -252,12 +262,43 @@ __weak void Detect_Task(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    osDelay(100);
   }
   /* USER CODE END Detect_Task */
 }
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+/* 板载 2812 LED 任务：彩色呼吸（亮度 1.5s 一个周期，色相 6s 绕一圈），
+ * 20ms 一拍，即 50Hz 刷新；只占用一个低优先级线程，不影响控制与通信 */
+void LED_Task(void const * argument)
+{
+  (void)argument;
+
+  BSP_LED_SetMode(LED_MODE_BREATHE_COLOR, LED_DEFAULT_R, LED_DEFAULT_G, LED_DEFAULT_B);
+  BSP_LED_SetBreathPeriod(LED_DEFAULT_PERIOD_MS);
+  BSP_LED_SetColorPeriod(LED_DEFAULT_COLOR_PERIOD_MS);
+
+  for (;;)
+  {
+    BSP_LED_Task();
+    osDelay(LED_TASK_PERIOD_MS);
+  }
+}
 
 /* USER CODE END Application */
+
+/* No printf, allocation, or blocking I/O on a damaged task stack.
+ * Inspect these retained values in the debugger after the fail-stop. */
+volatile TaskHandle_t stack_overflow_task;
+volatile char stack_overflow_name[configMAX_TASK_NAME_LEN];
+void vApplicationStackOverflowHook(TaskHandle_t task, char *name)
+{
+    taskDISABLE_INTERRUPTS();
+    stack_overflow_task = task;
+    for (unsigned i=0; i<configMAX_TASK_NAME_LEN; ++i) {
+        stack_overflow_name[i] = name ? name[i] : 0;
+        if (!name || !name[i]) break;
+    }
+    for (;;) { __NOP(); }
+}

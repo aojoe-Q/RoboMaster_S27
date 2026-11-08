@@ -22,6 +22,9 @@
 #include "Arm_USB_task.h"
 #include "arm_usb_protocol.h"
 #include "ring_buffer.h"
+#include "arm_output.h"
+#include "can_health.h"
+#include "motor_encoding.h"
 
 /* ------------------------------------------------------------ fakes */
 
@@ -75,6 +78,7 @@ static void feedback_now(void)
 {
     for (int i = 0; i < 7; i++)
     {
+        joint_L_motor[i].status = 1U;
         joint_L_motor[i].update_tick = fake_ms;
         joint_L_motor[i].update_count++;
     }
@@ -312,8 +316,8 @@ static bool write_file(const char *dir, const char *name, const uint8_t *data, u
 int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : ".";
-    const float ok_pos[7]  = { 0.10f, 0.50f, 0.60f, -1.0f, 0.20f, -0.30f, 0.35f };
-    const float ok_pos2[7] = { -0.20f, 1.00f, 1.20f, 2.0f, -0.50f, 1.00f, 0.10f };
+    const float ok_pos[7]  = { 0.10f, 0.50f, 0.60f, -1.0f, 0.20f, -0.30f, -0.35f };
+    const float ok_pos2[7] = { -0.20f, 1.00f, 1.20f, 2.0f, -0.50f, 1.00f, -0.10f };
     uint8_t frame[ARM_PROTO_MAX_FRAME];
     uint16_t flen;
     float got[7];
@@ -646,6 +650,29 @@ int main(int argc, char **argv)
     CHECK(usb_stats.rx_overflow_bytes == 100 && (o.fault_code & ARM_FAULT_RX_OVERFLOW),
           "overflow counted and latched");
 
+    /* Velocity limits: zero-compatible, host can tighten but not relax;
+       reject a negative signed value without replacing the valid target. */
+    fresh_enabled_session();
+    uint8_t limit_payload[ARM_POS_CMD_PAYLOAD_SIZE] = {0};
+    float limits[7];
+    for (int j=0; j<7; ++j) put32(limit_payload+8+4*j, (int32_t)lroundf(ok_pos[j]*1e6f));
+    limit_payload[4]=100; limit_payload[6]=1;
+    put32(limit_payload, (int32_t)host_now());
+    put32(limit_payload+36, 100000);
+    put32(limit_payload+40, 2000000);
+    send_simple(ARM_MSG_POSITION_CMD,limit_payload,sizeof(limit_payload));
+    (void)step(10);
+    CHECK(Arm_USB_Get_PC_Command(got,limits), "limited target readable");
+    CHECK(fabsf(limits[0]-0.1f)<1e-6f && limits[1]==0.5f && limits[2]==0.5f,
+          "host limit tightens, hard cap and zero default apply");
+    put32(limit_payload, (int32_t)host_now());
+    put32(limit_payload+36,-1);
+    send_simple(ARM_MSG_POSITION_CMD,limit_payload,sizeof(limit_payload));
+    o=step(10);
+    CHECK(o.acks==1 && o.ack_result[0]==ARM_ACK_BAD_VALUE,"negative limit rejected");
+    CHECK(Arm_USB_Get_PC_Command(got,limits) && fabsf(limits[0]-0.1f)<1e-6f,
+          "rejected limit did not overwrite command");
+
     /* 20. Replay frames built by Python in a fresh session. */
     char path[512];
     snprintf(path, sizeof(path), "%s/host_frames.bin", dir);
@@ -685,7 +712,43 @@ int main(int argc, char **argv)
         }
     }
 
+    /* Diagnostic wire pages carry full-width counters and keep STATE intact. */
+    Arm_USB_Init();
+    can_health[0].tx_drop=0x12345678U;
+    can_health[0].rx_overflow=9U;
+    can_health[0].busoff_count=3U;
+    can_health[0].flags=1U;
+    can_health[0].tec=127U;
+    motor_tx_invalid[6]=42U;
+    arm_output_diag.state[6]=EN_FAIL;
+    arm_output_diag.attempts[6]=50U;
+    uint32_t diag_mark=sent_len;
+    o=step(500);
+    CHECK((o.flags & (ARM_STATE_FLAG_TX_DROP | ARM_STATE_FLAG_CAN_FAULT |
+          ARM_STATE_FLAG_CAN_RX_OVERFLOW | ARM_STATE_FLAG_DM_FAILED)) == 0x1EU,
+          "diagnostic STATE flags");
+    (void)step(500);
+    CHECK(write_file(dir,"diagnostic.bin",&sent[diag_mark],sent_len-diag_mark),"diagnostic fixture");
+
     printf("C checks: %s (%d failure%s)\n", failures ? "FAILED" : "OK", failures,
            failures == 1 ? "" : "s");
     return failures ? 1 : 0;
+}
+
+/* Hardware health stubs: USB tests run with healthy, already-enabled motors. */
+#include "arm_output.h"
+#include "can_health.h"
+#include "motor_encoding.h"
+volatile CanBusHealth can_health[3];
+volatile uint32_t can_joint_tx_drop[7], can_recovery_epoch, motor_tx_invalid[7];
+ArmOutputDiagnostics arm_output_diag;
+uint8_t Arm_Output_AllEnabled(void) { return 1U; }
+Arm_Control_Snapshot Arm_Control_GetSnapshot(void)
+{
+    Arm_Control_Snapshot s = {0};
+    s.pos[0]=ArmData.J1.send_set; s.pos[1]=ArmData.J2.send_set;
+    s.pos[2]=ArmData.J3.send_set; s.pos[3]=ArmData.J4.send_set;
+    s.pos[4]=ArmData.J5.send_set; s.pos[5]=ArmData.J6.send_set;
+    s.pos[6]=ArmData.Grip.send_set;
+    return s;
 }

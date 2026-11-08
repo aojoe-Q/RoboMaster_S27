@@ -34,6 +34,8 @@ files = [r"..\APP\Arm_USB_task.c", r"..\APP\arm_usb_protocol.c", r"..\APP\ring_b
          r"..\Components\Device\Src\MiniPC.c", r"..\USB_DEVICE\App\usbd_cdc_if.c",
          r"..\Core\Src\freertos.c", r"..\APP\Compat\app_can.c", r"..\APP\Arm_L_task.c",
          r"..\APP\Moter_task.c", r"..\APP\Arm_R_task.c", r"..\APP\referee_usart_task.c"]
+files += [r"..\APP\DM_motor.c", r"..\Modules\HT_motor.c", r"..\BSP\Src\bsp_can.c",
+          r"..\Application\Task\Src\CAN_Task.c"]
 os.makedirs(OUT, exist_ok=True)
 failed = 0
 for f in files:
@@ -42,6 +44,7 @@ for f in files:
         os.remove(obj)
     r = subprocess.run([CC] + args + ["-Wall", "-Wextra", "-o", obj, f], cwd=MDK,
                        capture_output=True, text=True)
+    if r.returncode: print(r.stdout + r.stderr)
     own = [l for l in (r.stdout + r.stderr).splitlines()
            if re.search(r"(warning|error):", l)
            and not re.search(r"Drivers|Middlewares|SystemView|FreeRTOS", l)]
