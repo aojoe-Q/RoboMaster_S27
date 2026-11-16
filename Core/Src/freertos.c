@@ -58,12 +58,13 @@ uint32_t App_Arm_USB_TaskBuffer[ 1024 ];
 osStaticThreadDef_t App_Arm_USB_TaskControlBlock;
 
 /* USER CODE END Variables */
-osThreadId Start_INS_TaskHandle;
-uint32_t Start_INS_TaskBuffer[ 2048 ];
-osStaticThreadDef_t Start_INS_TaskControlBlock;
-osThreadId Start_Control_TaskHandle;
-uint32_t Start_Control_TaskBuffer[ 2048 ];
-osStaticThreadDef_t Start_Control_TaskControlBlock;
+/* DISABLED: INS_Task and Control_Task not needed for ARM profile */
+// osThreadId Start_INS_TaskHandle;
+// uint32_t Start_INS_TaskBuffer[ 2048 ];
+// osStaticThreadDef_t Start_INS_TaskControlBlock;
+// osThreadId Start_Control_TaskHandle;
+// uint32_t Start_Control_TaskBuffer[ 2048 ];
+// osStaticThreadDef_t Start_Control_TaskControlBlock;
 osThreadId Start_CAN_TaskHandle;
 uint32_t Start_CAN_TaskBuffer[ 2048 ];
 osStaticThreadDef_t Start_CAN_TaskControlBlock;
@@ -95,8 +96,9 @@ void LED_Task(void const * argument);
 
 /* USER CODE END FunctionPrototypes */
 
-void INS_Task(void const * argument);
-void Control_Task(void const * argument);
+/* DISABLED: INS_Task and Control_Task declarations */
+// void INS_Task(void const * argument);
+// void Control_Task(void const * argument);
 void CAN_Task(void const * argument);
 void Detect_Task(void const * argument);
 
@@ -146,13 +148,14 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of Start_INS_Task */
-  osThreadStaticDef(Start_INS_Task, INS_Task, osPriorityHigh, 0, 2048, Start_INS_TaskBuffer, &Start_INS_TaskControlBlock);
-  Start_INS_TaskHandle = osThreadCreate(osThread(Start_INS_Task), NULL);
+  /* DISABLED: INS_Task and Control_Task not needed for ARM profile */
+  // /* definition and creation of Start_INS_Task */
+  // osThreadStaticDef(Start_INS_Task, INS_Task, osPriorityHigh, 0, 2048, Start_INS_TaskBuffer, &Start_INS_TaskControlBlock);
+  // Start_INS_TaskHandle = osThreadCreate(osThread(Start_INS_Task), NULL);
 
-  /* definition and creation of Start_Control_Task */
-  osThreadStaticDef(Start_Control_Task, Control_Task, osPriorityAboveNormal, 0, 2048, Start_Control_TaskBuffer, &Start_Control_TaskControlBlock);
-  Start_Control_TaskHandle = osThreadCreate(osThread(Start_Control_Task), NULL);
+  // /* definition and creation of Start_Control_Task */
+  // osThreadStaticDef(Start_Control_Task, Control_Task, osPriorityAboveNormal, 0, 2048, Start_Control_TaskBuffer, &Start_Control_TaskControlBlock);
+  // Start_Control_TaskHandle = osThreadCreate(osThread(Start_Control_Task), NULL);
 
   /* definition and creation of Start_CAN_Task */
   osThreadStaticDef(Start_CAN_Task, CAN_Task, osPriorityHigh, 0, 2048, Start_CAN_TaskBuffer, &Start_CAN_TaskControlBlock);
@@ -193,43 +196,45 @@ void MX_FREERTOS_Init(void) {
 
 }
 
-/* USER CODE BEGIN Header_INS_Task */
-/**
-  * @brief  Function implementing the StartINS thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_INS_Task */
-__weak void INS_Task(void const * argument)
-{
-  /* init code for USB_DEVICE */
-  MX_USB_DEVICE_Init();
-  /* USER CODE BEGIN INS_Task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(100);
-  }
-  /* USER CODE END INS_Task */
-}
+/* DISABLED: INS_Task - not needed for ARM profile */
+// /* USER CODE BEGIN Header_INS_Task */
+// /**
+//   * @brief  Function implementing the StartINS thread.
+//   * @param  argument: Not used
+//   * @retval None
+//   */
+// /* USER CODE END Header_INS_Task */
+// __weak void INS_Task(void const * argument)
+// {
+//   /* init code for USB_DEVICE */
+//   MX_USB_DEVICE_Init();
+//   /* USER CODE BEGIN INS_Task */
+//   /* Infinite loop */
+//   for(;;)
+//   {
+//     osDelay(100);
+//   }
+//   /* USER CODE END INS_Task */
+// }
 
-/* USER CODE BEGIN Header_Control_Task */
-/**
-* @brief Function implementing the StartControl thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_Control_Task */
-__weak void Control_Task(void const * argument)
-{
-  /* USER CODE BEGIN Control_Task */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(100);
-  }
-  /* USER CODE END Control_Task */
-}
+/* DISABLED: Control_Task - not needed for ARM profile */
+// /* USER CODE BEGIN Header_Control_Task */
+// /**
+// * @brief Function implementing the StartControl thread.
+// * @param argument: Not used
+// * @retval None
+// */
+// /* USER CODE END Header_Control_Task */
+// __weak void Control_Task(void const * argument)
+// {
+//   /* USER CODE BEGIN Control_Task */
+//   /* Infinite loop */
+//   for(;;)
+//   {
+//     osDelay(100);
+//   }
+//   /* USER CODE END Control_Task */
+// }
 
 /* USER CODE BEGIN Header_CAN_Task */
 /**

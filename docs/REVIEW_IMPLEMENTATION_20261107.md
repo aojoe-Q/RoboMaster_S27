@@ -69,7 +69,7 @@ python tools/selftest/full_arm_build.py
 
 - USB C/Python 双向回归：会话、CRC、过期、重放、使能/撤防、反馈看门狗、限速字段、两页诊断的 32 位计数和字段顺序。
 - 控制测试直接编译实际 `DM_motor.c`、`Moter_task.c`、`bsp_can.c`：编码边界/NaN/Inf、速度/加速度/反向阶跃、使能新反馈、50 次上限、单轴离线、显式恢复、FIFO 公平延期、bus-off 限次/取消失败、队列溢出/异常 DLC。
-- 完整 ARM 构建使用当前 Keil 工程记录参数，重新编译 107 个编译单元并链接，产物 `tools/selftest/build/full_arm/project.axf` 和 `project.hex`；编译/链接日志在同目录。实际工具链是 Arm Compiler 6.21，原方案写的 6.19 与当前工程不一致。
+- 完整 ARM 构建使用当前 Keil 工程记录参数，重新编译 107 个编译单元并链接，产物 `tools/selftest/build/full_arm/project.axf` 和 `project.hex`；编译/链接日志在同目录。实际工具链是 Arm Compiler 6.21，原方案写的 6.19 与当前工程不 一致。
 - 主机假 HAL 测试验证软件分支，不能证明物理总线恢复、机械行为或调度抖动。未修改 MPU、Cache、DMA section 或 scatter 布局。
 
 实机待验收：连续 30 次上电（含电机延迟上电）、夹爪空载标零、单轴断开/重新上线、无 ACK 与 bus-off 故障注入、FIFO/队列压力、250 Hz 最坏负载和帧间差、反馈年龄 <20 ms、实际轨迹速度/加速度/跟踪误差。每项需记录时间戳、总线分析仪数据及健康日志；不能用通过编译替代验收。

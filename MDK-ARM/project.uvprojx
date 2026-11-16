@@ -49,7 +49,7 @@
             <NotGenerated>0</NotGenerated>
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
-          <OutputDirectory>COD_H7_Template\</OutputDirectory>
+          <OutputDirectory>.\COD_H7_Template\</OutputDirectory>
           <OutputName>project</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
@@ -82,7 +82,7 @@
           </BeforeMake>
           <AfterMake>
             <RunUserProg1>0</RunUserProg1>
-            <RunUserProg2>1</RunUserProg2>
+            <RunUserProg2>0</RunUserProg2>
             <UserProg1Name></UserProg1Name>
             <UserProg2Name></UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
@@ -419,11 +419,6 @@
               <FileName>Arm_L_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\APP\Arm_L_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>Arm_R_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\APP\Arm_R_task.c</FilePath>
             </File>
             <File>
               <FileName>DM_motor.c</FileName>

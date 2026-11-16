@@ -7,7 +7,7 @@
  *   3) 对外接口：Arm_L_Task() 任务入口与各模式处理函数。
  *
  * 注意：Arm_mode_t 新增成员只能追加在末尾，已有枚举值可能被上位机依赖；
- *       本文件中部分历史注释为乱码，保持原样，仅在其旁补充说明。
+ *       本文件中部分历史注释为乱码，保持原样，仅在其旁补充说明。李沛哲是我杨奥琪的爹
  */
 #ifndef __ARM_L_TASK_H
 #define __ARM_L_TASK_H
@@ -19,31 +19,27 @@
 
 #define M_PI 3.14159265358979323846f // 圆周率（单精度版）：本工程用弧度计算，避免混用 double 常量
 #define LEFT 0 // 左臂标志（部分机构按左右对称处理）
-#define RIGHT 1 // 右臂标志
+#define RIGHT 1 // 右臂标志李沛哲是我杨奥琪的爹
 #define STOP 0 // 任务停止/启动标志的 0/1 取值
 #define START 1 // 启动
 
 
 /* 关节位置硬限位（rad，电机侧读数）：limitPosition() 用它把目标钳在机械可达范围内，
- * 超限时直接截断。注意 J2/J3 下限为 0（单方向行程），J4 允许 ±4.3 rad（越过半圈），
- * 夹爪量程为 [-12, 0]：负方向为闭合方向，12 rad 远大于实际行程，起兜底作用。
  */
-//���ؽ���λ
 #define J1_Max_position 2.81695309f		
 #define J1_Min_position -2.96054893f		     
-#define J2_Max_position 1.7732357f		
-#define J2_Min_position 0.0f		      // J2 下限为 0：只允许单方向运动
-#define J3_Max_position 2.39008179f		
-#define J3_Min_position 0.0f		  // J3 下限为 0：只允许单方向运动
-#define J4_Max_position 4.3f		 // J4 行程约 ±246°，可越过半圈
-#define J4_Min_position -4.3f		 
-#define J5_Max_position 1.23497334f		
-#define J5_Min_position -1.29562798f	 
-#define J6_Max_position 2.22337666f		
-#define J6_Min_position -2.25160637f 
+#define J2_Max_position 0.0f		
+#define J2_Min_position -2.10669899f		     
+#define J3_Max_position 0.0f		
+#define J3_Min_position -3.04016972f		  
+#define J4_Max_position 3.02567291f		 
+#define J4_Min_position 0.0f		 
+#define J5_Max_position 1.49938965f		
+#define J5_Min_position -0.994316101f	 
+#define J6_Max_position 2.42408657f		
+#define J6_Min_position -0.710879326f 
 #define Grip_Max_position 0.0f    	 
 #define Grip_Min_position -12.0f		 // 夹爪量程下限：负方向为闭合，数值取得很大，只作兜底
-/*������λ*/
 /* J1/J2 碰撞禁区（仅遥控模式生效）：当 J2 实测值低于 J1_J2_ZONE_J2_MAX 时，
  * J1 的下限从 J1_Min_position 收紧到 J1_J2_ZONE_J1_MIN，防止两节臂段在低姿态相撞。
  * PC 模式（Arm_PC_Control）不启用该逻辑，仍使用静态 J1 限位。
@@ -55,19 +51,18 @@
 #define J1_J2_ZONE_J1_MIN  (-0.17605114f) // 禁区内的 J1 下限（比 J1_Min_position 更保守）
 #define Special_J2_limit 0.0635156631 // J2 贴近基座的判定阈值（旧版按键模式使用，现仅存于注释代码）
 #define J1_Special_Max_position 0.215261688 // 贴近基座时 J1 允许的区间（旧版按键模式使用，现仅存于注释代码）
-#define J1_Special_Min_position -0.215261688  //�����������??
+#define J1_Special_Min_position -0.215261688 
 
 
 /* 各关节 MIT 模式的 PD 增益：Kp [N·m/rad]，Kd [N·m·s/rad]。
  * Arm_L_Init() 在电机使能且目标位置与实测同步完成之后才写入这些增益，
  * 避免上电瞬间目标跳变造成力矩冲击；之后由 Arm_Publish() 每拍随快照下发。
  */
-//���ؽ�PD
 #define J1_PID_KP 68.0f		//J1 KP
 #define J1_PID_KD 4.0f		//J1 KD
 #define J2_PID_KP 200.0f	//J2 KP
 #define J2_PID_KD 4.0f		//J2 KD
-#define J3_PID_KP 165.0f	//J3 KP 200
+#define J3_PID_KP 100.0f	//J3 KP 200
 #define J3_PID_KD 3.0f		//J3 KD
 #define J4_PID_KP 32.0f		//J4 KP
 #define J4_PID_KD 0.5f		//J4 KD
@@ -79,36 +74,31 @@
 #define Grip_PID_KD 1.0f	//Grip KD
 
 /* 无力（ARM_POWERLESS）模式使用的 KP/KD：全 0，等效只发位置、不出力矩。 */
-#define Joint_Atony_KP_KD 0.0f		//���ؽ�����KP KD
-
+#define Joint_Atony_KP_KD 0.0f		
 /* 各关节零点偏置（rad）：关节角 = 电机读数 - 该值。J3 的 0.1f 为标定后保留的固定偏置。 */
-//�����ؽڳ�ʼλ��
 #define J1_zero_position 0.0f
 #define J2_zero_position 0.0f
-#define J3_zero_position 0.1f
+#define J3_zero_position 0.0f//判断电机正反后修改偏重
 #define J4_zero_position 0.0f
 #define J5_zero_position 0.0f
 #define J6_zero_position 0.0f
 #define grip_zero_position 0.0f
 
-//��צ�н�λ��
-#define Grip_clamp_position 0.68f // 夹紧位置：夹住水杯时夹爪的目标开度（rad）
-//һ����תJ4ת��
+#define Grip_clamp_position 0.1f // 夹紧位置
+
+
 #define J4_half_turn 4.42530632f    // J4 半圈对应的弧度值（旧版按键模式用它扩大限位，现仅存于注释代码）
 
 /* 预设位姿表（rad）：左侧工位 L_* / 右侧工位 R_*，每个工位两个候选点（_1/_2）。
  * save_position 为“放置/存放”位姿，get_position 为“取物”位姿；
  * 每行的 Grip 字段是该位姿下夹爪的目标开度：0.67 约为夹紧，0.01/0 约为张开。
  */
-//һ����������Ԫ·������
-/*���??*/
-/*��������Ԫ*/
 #define L_J1_save_position_1 -2.87270164f
 #define L_J2_save_position_1 0.82826561f
 #define L_J3_save_position_1 0.648248634f
 #define L_J4_save_position_1 -0.157740593f
 #define L_J5_save_position_1 -1.09578896f
-#define L_J6_save_position_1 0.803196907f
+#define L_J6_save_position_1 0.803196907f7
 #define L_Grip_save_position_1 0.67f // 0.67：夹紧（咬住水杯）
 
 #define L_J1_save_position_2 -2.91139366f
@@ -119,7 +109,6 @@
 #define L_J6_save_position_2 0.804341316f
 #define L_Grip_save_position_2 0.01f // 0.01：接近全开
 
-/*ȡ������Ԫ*/
 #define L_J1_get_position_1 -2.87270164f
 #define L_J2_get_position_1 0.82826561f
 #define L_J3_get_position_1 0.648248634f
@@ -136,8 +125,6 @@
 #define L_J6_get_position_2 0.804341316f
 #define L_Grip_get_position_2 0.67f
 
-/*�Ҳ�*/
-/*��������Ԫ*/
 #define R_J1_save_position_1 2.77771378f
 #define R_J2_save_position_1 0.84295858f
 #define R_J3_save_position_1 0.646714455f
@@ -154,7 +141,6 @@
 #define R_J6_save_position_2 -0.699435234f
 #define R_Grip_save_position_2 0.01f
 
-/*ȡ������Ԫ*/
 #define R_J1_get_position_1 2.77771378f
 #define R_J2_get_position_1 0.84295858f
 #define R_J3_get_position_1 0.646714455f
@@ -202,13 +188,13 @@ typedef  struct
  * 避免改变已有模式的数值（PC 端按数值下发模式）。 */
 typedef enum 
 {
-	ARM_L_MOVEMENT_J1_J4,        //��ۣ�J1-J4���˶�
-	ARM_L_MOVEMENT_J5_GRIP,      //��ۣ�J5-��צ���˶�
-	ARM_KEY_CONTROL,             //�����Զ��������ģ�?
-	ARM_RETURN_INITIAL_POSTURE,  //�ۻع��ʼ���?�ϣ���̬
-	CHASSIS_MOVEMENT_ARM_KEEP,   //�����ڱ�������������˶�??
+	ARM_L_MOVEMENT_J1_J4,        
+	ARM_L_MOVEMENT_J5_GRIP,      
+	ARM_KEY_CONTROL,             
+	ARM_RETURN_INITIAL_POSTURE,  
+	CHASSIS_MOVEMENT_ARM_KEEP,   
 	ARM_POWERLESS, // 无力：Kp/Kd=0，不下发力矩，只保持通信
-	TAKE_WATER,//ֹͣģʽ // 取水流程（TAKE_WATER_1）
+	TAKE_WATER,// 取水流程（TAKE_WATER_1）
 	PASS_WATER, // 递水流程（PASS_WATER_1）
 	ARM_RESET, // 复位流程（ARM_RESET_1）
 	TAKE_Grip, // 夹爪取物流程（TAKE_Grip_1）
@@ -257,7 +243,7 @@ typedef struct
 	uint8_t ArmMode; // 当前工作模式（Arm_mode_t）
 	DM_contorl_t J1,J2,J3,J4,J5,J6,Grip; // 7 个关节控制量：J1..J6 + 夹爪（电机 ID 1..7）
 	fp32 Total_Angle; // 底座累计总角度（rad，当前主流程未使用）
-//	arm_set_t arm_set;  //���ȽǶ�
+//	arm_set_t arm_set;  
 	fp32 pitch_position; // 俯仰角（预留，当前未使用）
 	fp32 roll_position; // 横滚角（预留，当前未使用）
 }ArmData_t;
@@ -279,7 +265,7 @@ extern volatile uint8_t Arm_L_Ready; // 初始化完成标志：1 = 已使能且
  * Arm_L_Task 是 FreeRTOS 任务入口（osPriorityHigh，主循环 osDelay(8) ≈ 125 Hz），
  * 内部按 ArmData.ArmMode 分派；其余函数是各模式的具体实现，通常只被该任务调用。
  */
-void Arm_L_Task(void const * argument);
+void Arm_L_Task();
 void Arm_L_Init(void); // 一次性初始化：等电机上电、逐个使能、同步目标、写入 PD 增益
 void data_updata(void); // 每拍把电机反馈与解算结果写回 ArmData
 uint8_t GetArmMode(void); // 解析遥控拨杆/按键，返回目标模式

@@ -4,6 +4,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "Remote_Control.h"
 #include "ramp.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 /* Exported variables ---------------------------------------------------------*/
 /**
@@ -17,7 +19,7 @@
 /**
  * @brief remote control usart RxDMA MultiBuffer
  */
-__attribute__((section (".AXI_SRAM"))) uint8_t SBUS_MultiRx_Buf[2][SBUS_RX_BUF_NUM];
+__attribute__((section (".AXI_SRAM_DMA"))) uint8_t SBUS_MultiRx_Buf[2][SBUS_RX_BUF_NUM];
  
 /* Private variables ---------------------------------------------------------*/
 /**
@@ -88,6 +90,8 @@ void SBUS_TO_RC(volatile const uint8_t *sbus_buf, Remote_Info_Typedef  *remote_c
   */
 void Remote_Message_Moniter(Remote_Info_Typedef  *remote_ctrl)
 {
+  taskENTER_CRITICAL();
+
   /* Juege the device status */
   if(remote_ctrl->online_cnt <= 0x32U)
   {
@@ -95,16 +99,18 @@ void Remote_Message_Moniter(Remote_Info_Typedef  *remote_ctrl)
     memset(remote_ctrl,0,sizeof(Remote_Info_Typedef));
 
     /* reset the online count */
-		
+
     /* set the lost flag */
 		remote_ctrl->rc_lost = true;
-		
+
   }
   else if(remote_ctrl->online_cnt > 0)
   {
     /* online count decrements which reseted in received interrupt  */
     remote_ctrl->online_cnt--;
   }
+
+  taskEXIT_CRITICAL();
 }
 //------------------------------------------------------------------------------
 

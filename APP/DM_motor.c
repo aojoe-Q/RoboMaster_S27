@@ -125,17 +125,10 @@ float uint_to_float_DM(int x_int, float x_min, float x_max, int bits)
 /*使能*/
 void enable_motor_mode(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id)
 {
-	uint8_t data[8];
+	uint8_t data[8] = {0xFF, 0xFF, 0xFF, 0xFF,
+	                   0xFF, 0xFF, 0xFF, 0xFC};
 	uint16_t id = motor_id + mode_id; // 标准帧 ID = 电机 ID + 模式号
-	
-	data[0] = 0xFF;
-	data[1] = 0xFF;
-	data[2] = 0xFF;
-	data[3] = 0xFF;
-	data[4] = 0xFF;
-	data[5] = 0xFF;
-	data[6] = 0xFF;
-	data[7] = 0xFC; // 0xFC：使能命令码
+
 	canx_send_data(hcan, id, data, 8); // 发送结果不检查；需要重试时由调用方负责
 }
 
@@ -146,17 +139,10 @@ void enable_motor_mode(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id)
 /*失能*/
 void unenable_motor_mode(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id)
 {
-	uint8_t data[8];
+	uint8_t data[8] = {0xFF, 0xFF, 0xFF, 0xFF,
+	                   0xFF, 0xFF, 0xFF, 0xFD};
 	uint16_t id = motor_id + mode_id; // 与使能帧相同的 ID 计算方式
-	
-	data[0] = 0xFF;
-	data[1] = 0xFF;
-	data[2] = 0xFF;
-	data[3] = 0xFF;
-	data[4] = 0xFF;
-	data[5] = 0xFF;
-	data[6] = 0xFF;
-	data[7] = 0xFD; // 0xFD：失能命令码
+
 	canx_send_data(hcan, id, data, 8); // 失能后电机不再出力，机械臂可能因重力下落
 }
 
@@ -166,17 +152,10 @@ void unenable_motor_mode(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id)
 /*保存位置零点*/
 void save_motor_zero(hcan_t* hcan, uint16_t motor_id, uint16_t mode_id)
 {
-	uint8_t data[8];
+	uint8_t data[8] = {0xFF, 0xFF, 0xFF, 0xFF,
+	                   0xFF, 0xFF, 0xFF, 0xFE};
 	uint16_t id = motor_id + mode_id; // 帧 ID 与使能帧一致
-	
-	data[0] = 0xFF;
-	data[1] = 0xFF;
-	data[2] = 0xFF;
-	data[3] = 0xFF;
-	data[4] = 0xFF;
-	data[5] = 0xFF;
-	data[6] = 0xFF;
-	data[7] = 0xFE; // 0xFE：保存零点命令码
+
 	canx_send_data(hcan, id, data, 8); // 单帧命令，电机收到后写入内部非易失存储
 }
 
