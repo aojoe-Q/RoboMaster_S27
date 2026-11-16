@@ -1,0 +1,117 @@
+================================================================================
+                        函数映射表 — 快速参考
+================================================================================
+
+【原轮询版本调用】→ 【DMA独立版本调用】
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+初始化：
+    BSP_LED_Init()              →  BSP_LED_DMA_Init()
+
+设置颜色（直接驱动）：
+    BSP_LED_SetRGB(r,g,b)       →  BSP_LED_SetRGB_DMA(r,g,b)
+
+设置灯效模式：
+    BSP_LED_SetMode(mode,r,g,b) →  BSP_LED_SetMode_DMA(mode,r,g,b)
+
+设置呼吸周期（ms）：
+    BSP_LED_SetBreathPeriod(ms)  →  BSP_LED_SetBreathPeriod_DMA(ms)
+
+设置色相周期（ms）：
+    BSP_LED_SetColorPeriod(ms)   →  BSP_LED_SetColorPeriod_DMA(ms)
+
+设置饱和度（0-255）：
+    BSP_LED_SetSaturation(sat)   →  BSP_LED_SetSaturation_DMA(sat)
+
+主循环中调用（每20ms）：
+    BSP_LED_Task()               →  BSP_LED_Task_DMA()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【灯效模式】（保持相同）
+
+    LED_MODE_OFF           - 完全关闭
+    LED_MODE_ON            - 常亮
+    LED_MODE_BREATHE       - 单色呼吸
+    LED_MODE_BREATHE_COLOR - 彩色呼吸
+    LED_MODE_BLINK         - 闪烁
+
+【默认参数】（保持相同）
+
+    LED_DEFAULT_R          = 0
+    LED_DEFAULT_G          = 40
+    LED_DEFAULT_B          = 255      (默认蓝色)
+    
+    LED_DEFAULT_PERIOD_MS  = 1500     (1.5秒呼吸周期)
+    LED_DEFAULT_COLOR_PERIOD_MS = 7000 (7秒色相循环)
+    LED_DEFAULT_SAT        = 255      (完全饱和)
+    
+    LED_TASK_PERIOD_MS     = 20       (20ms任务周期)
+    LED_BLINK_HALF_MS      = 150      (150ms半周期闪烁)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【完整示例代码】
+
+void led_task(void* arg)
+{
+  // 1. 初始化
+  BSP_LED_DMA_Init();
+  
+  // 2. 设置模式
+  BSP_LED_SetMode_DMA(LED_MODE_BREATHE_COLOR, 0, 0, 0);
+  
+  // 3. 自定义参数（可选）
+  BSP_LED_SetBreathPeriod_DMA(1500);
+  BSP_LED_SetColorPeriod_DMA(7000);
+  BSP_LED_SetSaturation_DMA(255);
+  
+  // 4. 主循环
+  for (;;) {
+    BSP_LED_Task_DMA();
+    osDelay(20);
+  }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【步骤总结】
+
+1. CubeMX配置DMA
+   → Connectivity → SPI6 → DMA → Add SPI6 TX
+   → System Core → NVIC → Enable DMA interrupt
+   → Generate Code
+
+2. 添加文件到项目
+   → Src/bsp_led_dma_standalone.c
+
+3. 修改Makefile或CMakeLists.txt
+   → SOURCES += Src/bsp_led_dma_standalone.c
+
+4. 修改main.c中的调用
+   → BSP_LED_Init()      → BSP_LED_DMA_Init()
+   → BSP_LED_Task()      → BSP_LED_Task_DMA()
+   → BSP_LED_SetMode()   → BSP_LED_SetMode_DMA()
+
+5. 编译
+   → make clean && make -j8
+
+6. 烧录测试
+   → 观察LED，应无闪白光
+
+【总耗时】
+   CubeMX:      5分钟
+   添加文件:    1分钟
+   修改代码:    2分钟
+   编译:        1分钟
+   ─────────
+   合计:        9分钟
+
+【预期结果】
+   ✅ LED呼吸平滑无闪烁
+   ✅ 闪白光消除
+   ✅ 其他任务无影响
+   ✅ 完全可控
+
+================================================================================

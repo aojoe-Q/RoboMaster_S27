@@ -19,7 +19,7 @@
 /**
  * @brief ADC sampling voltage array
  */
-__attribute__((section (".AXI_SRAM"))) uint16_t ADC_Voltage_Val[2];
+__attribute__((section (".AXI_SRAM_DMA"))) uint16_t ADC_Voltage_Val[2];
  
 /**
   * @brief  Configures the ADC. 

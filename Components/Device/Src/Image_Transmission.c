@@ -16,39 +16,56 @@
 #include "CRC.h"
 #include "usart.h"
 
-__attribute__((section (".AXI_SRAM"))) uint8_t Image_Trans_MultiRx_Buff[2][39];
+__attribute__((section (".AXI_SRAM_DMA"))) uint8_t Image_Trans_MultiRx_Buff[2][39];
 
 Image_Transmission_Info_TypeDef Image_Transmission_Info;
 VT13_Info_TypeDef VT13_Info;
 
 static int16_t bit8TObit16(uint8_t change_info[2]);
 
-void Image_Transmission_Info_Update(uint8_t *Buff){
+void Image_Transmission_Info_Update(uint8_t *Buff, uint16_t Size){
 
 	Image_Transmission_Info.Index = 0;
 	Image_Transmission_Info.DataLength = 0;
+
+	/* Minimum size check: need at least frame header for initial parsing */
+	if(Size < FrameHeader_Length){
+		return;
+	}
+
 	/*Check the header frame */
- 
+
 	if(Buff[0] == 0xA5){
-	
+
 	  if(Verify_CRC8_Check_Sum(&Buff[0],5) == true){
-		
-		  Image_Transmission_Info.DataLength = (uint16_t)(Buff[Image_Transmission_Info.Index+2]<<8 | Buff[Image_Transmission_Info.Index+1]) + FrameHeader_Length + CMDID_Length + CRC16_Length;
-		 
+
+		  /* Extract claimed data length from header */
+		  uint16_t claimed_data_len = (uint16_t)(Buff[Image_Transmission_Info.Index+2]<<8 | Buff[Image_Transmission_Info.Index+1]);
+
+		  /* Calculate total frame length */
+		  uint16_t total_frame_len = claimed_data_len + FrameHeader_Length + CMDID_Length + CRC16_Length;
+
+		  /* Validate frame length is within buffer bounds and reasonable limits */
+		  if(total_frame_len > Size || total_frame_len > IMAGE_TRANS_RX_LENGTH){
+			  return;
+		  }
+
+		  Image_Transmission_Info.DataLength = total_frame_len;
+
 			if(Verify_CRC16_Check_Sum(&Buff[Image_Transmission_Info.Index],Image_Transmission_Info.DataLength) == true){
-				
+
 			 #ifdef CUSTOM_ROBOT_DATA_ID
-				
-				if(Image_Transmission_Info.DataLength == 39){ 
+
+				if(Image_Transmission_Info.DataLength == 39){
 					 for(uint8_t i = 0; i< 30; i++){
 						 Image_Transmission_Info.custom_robot_data.data[i] = Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length + i];
-					 }			
+					 }
 				}
 			 #endif
-			
+
 			 #ifdef REMOTE_CONTROL_ID
-				
-				if(Image_Transmission_Info.DataLength == 21){					 
+
+				if(Image_Transmission_Info.DataLength == 21){
 					 Image_Transmission_Info.remote_control.mouse_x = bit8TObit16(&Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length]);
 					 Image_Transmission_Info.remote_control.mouse_y = bit8TObit16(&Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length + 2]);
 					 Image_Transmission_Info.remote_control.mouse_z = bit8TObit16(&Buff[Image_Transmission_Info.Index + FrameHeader_Length + CMDID_Length + 4]);
@@ -59,13 +76,13 @@ void Image_Transmission_Info_Update(uint8_t *Buff){
 			 #endif
 			}
 		}
-		
+
 	}else if(Buff[0] == 0xA9){
-	
-	     if(Buff[1] == 0x53){
-			 
+
+	     if(Size >= 21 && Buff[1] == 0x53){
+
 				  VT13_Info_Update(Buff,&VT13_Info);
-			 
+
 			 }
 		}
 }

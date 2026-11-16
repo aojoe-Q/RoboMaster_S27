@@ -28,6 +28,8 @@ static Rcdata_t       app_board_rc_data;
 
 /* Last time a dual-board frame was received (0 = never). */
 static uint32_t app_board_last_tick = 0;
+static uint32_t app_board_ch012_tick = 0;  /* 0x212 最后接收时刻 */
+static uint32_t app_board_ch3key_tick = 0; /* 0x213 最后接收时刻 */
 
 /* The old can_bsp.h provided this as a static inline helper in every TU.
  * One global definition replaces that; DM_motor.c and app_can.c both use it. */
@@ -53,13 +55,17 @@ static bool APP_Remote_IsOnline(void)
     return (!remote_ctrl.rc_lost) && (remote_ctrl.online_cnt > 0x32U);
 }
 
-/* Dual-board link is considered online for 100 ms after its last CAN frame. */
+/* Dual-board link is considered online only if BOTH required messages are received. */
 /* APP_Board_IsOnline：判断双板 CAN 链路是否在线。
- * 判据：收到过至少一帧，且距最后一帧不足 100 ms（app_board_last_tick）。 */
+ * 判据：0x212 和 0x213 都收到过，且都未超时（各自 100 ms）。
+ * 说明：双板分别发送通道 0~2/拨杆（0x212）和通道 3/键盘/鼠标（0x213）；
+ *      只有两种报文都在线，才能发布完整的遥控数据。 */
 static bool APP_Board_IsOnline(void)
 {
-    return (app_board_last_tick != 0U) &&
-           ((HAL_GetTick() - app_board_last_tick) < 100U);
+    uint32_t now_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    return (app_board_ch012_tick != 0U) && (app_board_ch3key_tick != 0U) &&
+           ((now_ms - app_board_ch012_tick) < 100U) &&
+           ((now_ms - app_board_ch3key_tick) < 100U);
 }
 
 /* Copy the decoded DT7 data into the APP's Rcdata_t view. */
@@ -186,23 +192,23 @@ void APP_CAN_RxHandler(FDCAN_HandleTypeDef *hcan, uint32_t id, uint8_t *data, ui
     {
         taskENTER_CRITICAL();
         /* Dual-board remote data. */
-        if (id == (uint32_t)CAN_Board_ID_1)
+        if (id == (uint32_t)CAN_Board_ID_1)  /* 0x212 */
         {
             app_board_rc_data.rc.ch[0] = (int16_t)((uint16_t)data[0] << 8 | data[1]);
             app_board_rc_data.rc.ch[1] = (int16_t)((uint16_t)data[2] << 8 | data[3]);
             app_board_rc_data.rc.ch[2] = (int16_t)((uint16_t)data[4] << 8 | data[5]);
             app_board_rc_data.rc.s[1]  = (char)data[6];
             app_board_rc_data.rc.s[0]  = (char)data[7];
-            app_board_last_tick = tick_ms;
+            app_board_ch012_tick = tick_ms;  /* 独立记录 0x212 时刻 */
         }
-        else if (id == (uint32_t)CAN_Board_ID_2)
+        else if (id == (uint32_t)CAN_Board_ID_2)  /* 0x213 */
         {
             app_board_rc_data.mouse.press_l = data[0];
             app_board_rc_data.mouse.press_r = data[1];
             app_board_rc_data.key.v         = (uint16_t)((uint16_t)data[2] << 8 | data[3]);
             app_board_rc_data.rc.ch[3]      = (int16_t)((uint16_t)data[4] << 8 | data[5]);
             app_board_rc_data.mouse.x       = (int16_t)((uint16_t)data[6] << 8 | data[7]);
-            app_board_last_tick            = tick_ms;
+            app_board_ch3key_tick           = tick_ms;  /* 独立记录 0x213 时刻 */
         }
         else if (id == (uint32_t)CAN_Board__float_ID_1)
         {

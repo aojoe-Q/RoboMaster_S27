@@ -74,7 +74,7 @@ static void USART_RxDMA_MultiBuffer_Init(UART_HandleTypeDef *huart, uint32_t *Ds
 
  huart->ReceptionType = HAL_UART_RECEPTION_TOIDLE;
 
- huart->RxXferSize    = DataLength * 2;
+ huart->RxXferSize    = DataLength;
 
  SET_BIT(huart->Instance->CR3,USART_CR3_DMAR);
 
@@ -125,7 +125,7 @@ static void USER_USART5_RxHandler(UART_HandleTypeDef *huart,uint16_t Size){
 					((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->CR |= DMA_SxCR_CT;
 					
 				  /* Reset the receive count */
-					__HAL_DMA_SET_COUNTER(huart->hdmarx,SBUS_RX_BUF_NUM*2);
+					__HAL_DMA_SET_COUNTER(huart->hdmarx,SBUS_RX_BUF_NUM);
 
 				  /* Juge whether size is equal to the length of the received data */
 					if(Size == SBUS_RX_BUF_NUM)
@@ -146,7 +146,7 @@ static void USER_USART5_RxHandler(UART_HandleTypeDef *huart,uint16_t Size){
 					((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->CR &= ~(DMA_SxCR_CT);
 				
 					/* Reset the receive count */
-					__HAL_DMA_SET_COUNTER(huart->hdmarx,SBUS_RX_BUF_NUM*2);
+					__HAL_DMA_SET_COUNTER(huart->hdmarx,SBUS_RX_BUF_NUM);
 
 					if(Size == SBUS_RX_BUF_NUM)
 					{
@@ -183,14 +183,14 @@ static void USER_USART1_RxHandler(UART_HandleTypeDef *huart,uint16_t Size){
 				  /* Juge whether size is equal to the length of the received data */
 					if(Size > 10)
 					{
-					
+
 						/* Memory 0 data update to remote_ctrl*/
-						Image_Transmission_Info_Update(Image_Trans_MultiRx_Buff[0]);
-					
+						Image_Transmission_Info_Update(Image_Trans_MultiRx_Buff[0], Size);
+
 					}
 					
 					/* Reset the receive count */
-				  __HAL_DMA_SET_COUNTER(huart->hdmarx,IMAGE_TRANS_RX_LENGTH*2);
+				  __HAL_DMA_SET_COUNTER(huart->hdmarx,IMAGE_TRANS_RX_LENGTH);
 
 			}
 			/* Current memory buffer used is Memory 1 */
@@ -204,10 +204,10 @@ static void USER_USART1_RxHandler(UART_HandleTypeDef *huart,uint16_t Size){
 					if(Size > 10)
 					{
 						/* Memory 1 to data update to remote_ctrl*/
-						Image_Transmission_Info_Update(Image_Trans_MultiRx_Buff[1]);
+						Image_Transmission_Info_Update(Image_Trans_MultiRx_Buff[1], Size);
 					}
 				  /* Reset the receive count */
-					__HAL_DMA_SET_COUNTER(huart->hdmarx,IMAGE_TRANS_RX_LENGTH*2);
+					__HAL_DMA_SET_COUNTER(huart->hdmarx,IMAGE_TRANS_RX_LENGTH);
 			}
 #else
   
@@ -222,7 +222,7 @@ static void USER_USART1_RxHandler(UART_HandleTypeDef *huart,uint16_t Size){
 						Referee_System_Frame_Update(Referee_System_Info_MultiRx_Buf[0]);
 						memset(Referee_System_Info_MultiRx_Buf[0],0,REFEREE_RXFRAME_LENGTH);
 					}
-					__HAL_DMA_SET_COUNTER(huart->hdmarx,REFEREE_RXFRAME_LENGTH*2);
+					__HAL_DMA_SET_COUNTER(huart->hdmarx,REFEREE_RXFRAME_LENGTH);
 			}
 			/* Current memory buffer used is Memory 1 */
 			else{
@@ -237,7 +237,7 @@ static void USER_USART1_RxHandler(UART_HandleTypeDef *huart,uint16_t Size){
 						memset(Referee_System_Info_MultiRx_Buf[1],0,REFEREE_RXFRAME_LENGTH);
 
 					}
-					__HAL_DMA_SET_COUNTER(huart->hdmarx,REFEREE_RXFRAME_LENGTH*2);
+					__HAL_DMA_SET_COUNTER(huart->hdmarx,REFEREE_RXFRAME_LENGTH);
 
 			}
  
@@ -316,7 +316,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart,uint16_t Size)
 
 void USART_Vofa_Justfloat_Transmit(float SendValue1,float SendValue2,float SendValue3){
  
-    __attribute__((section (".AXI_SRAM")))  static uint8_t Rx_Buf[16];
+    __attribute__((section (".AXI_SRAM_DMA")))  static uint8_t Rx_Buf[16];
 
 		uint8_t *SendValue1_Pointer,*SendValue2_Pointer,*SendValue3_Pointer;
 

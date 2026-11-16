@@ -112,12 +112,135 @@ static void restart(unsigned i, uint32_t now, const joint_motor_measure_t *fb)
     baseline[i] = fb->update_count;
     last_tx[i] = now - 20U;
 }
-/* Arm_Output_Step: 7 关节输出状态机，每 4 ms 由 Moter_Task 调用一次。
- * 参数 now：当前毫秒时间（xTaskGetTickCount() * portTICK_PERIOD_MS）。
- * 流程：总线健康 -> 拷贝反馈 -> 启动/总线恢复判定 -> retry/抑制判定 ->
- *       逐关节（反馈超时、使能握手、控制帧发送）。
- * 注意：本函数是唯一向 FDCAN1 发关节帧的地方，不可重入；
- *       所有发送前都检查 TX FIFO 至少剩 2 个槽位。 */
+/* ==================== 状态检查类函数 ====================*/
+
+/* 检测 CAN 总线恢复：若 can_recovery_epoch 变化，标记总线抑制 */
+static void Arm_CheckBusRecovery(uint32_t now)
+{
+    if (seen_epoch != can_recovery_epoch) {
+        seen_epoch = can_recovery_epoch;
+        arm_output_diag.bus_inhibit = 1U;
+        for (unsigned i = 0; i < 7; ++i) {
+            arm_output_diag.state[i] = EN_FAIL;
+        }
+    }
+}
+
+/* 判定 retry 请求是否有效（需新鲜指令 + 全零增益/力矩） */
+static uint8_t Arm_CheckRetryValid(const Arm_Control_Snapshot *cmd, uint32_t now)
+{
+    /* 指令超过 100ms 视为过期 */
+    if (now - cmd->tick_ms > 100U) return 0U;
+
+    /* 检查所有关节增益/力矩是否为零 */
+    for (unsigned i = 0; i < 7; ++i) {
+        if (cmd->kp[i] != 0.0f || cmd->kd[i] != 0.0f || cmd->torque[i] != 0.0f) {
+            return 0U;
+        }
+    }
+    return 1U;
+}
+
+/* 检查单关节反馈超时或电机状态异常 */
+static void Arm_CheckFeedbackTimeout(unsigned i, const joint_motor_measure_t *fb, uint32_t now)
+{
+    if (arm_output_diag.state[i] != EN_OK) return;
+
+    uint32_t age = now - fb->update_tick;
+    if (age > ARM_OUTPUT_FB_TIMEOUT_MS || fb->status != 1U) {
+        arm_output_diag.state[i] = EN_FAIL;
+    }
+}
+
+/* 检查 TX FIFO 是否有足够空间（需 >= 2 个槽位） */
+static uint8_t Arm_CheckFifoSpace(void)
+{
+    return (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1) >= 2U) ? 1U : 0U;
+}
+
+/* ==================== 握手和发送类函数 ====================*/
+
+/* 检查使能握手是否成功 */
+static uint8_t Arm_CheckEnableHandshake(unsigned i, const joint_motor_measure_t *fb, uint32_t now)
+{
+    if (arm_output_diag.state[i] != EN_SEND) return 0U;
+
+    uint32_t age = now - fb->update_tick;
+
+    /* 握手成功条件：反馈 ID 匹配、status==1、update_count 有增加、年龄≤100ms、时间戳晚于使能 */
+    if (fb->motorid == i + 1U &&
+        fb->status == 1U &&
+        fb->update_count != baseline[i] &&
+        age <= 100U &&
+        (int32_t)(fb->update_tick - sent_at[i]) > 0) {
+        return 1U;
+    }
+    return 0U;
+}
+
+/* 发送使能帧 + 零增益 MIT 帧 */
+static void Arm_SendEnableFrame(unsigned i, const joint_motor_measure_t *fb, uint32_t now)
+{
+    /* 20ms 节流：避免同一关节把 TX FIFO 打满 */
+    if (now - last_tx[i] < 20U) return;
+
+    /* 50 次尝试上限 */
+    if (arm_output_diag.attempts[i] >= 50U) {
+        arm_output_diag.state[i] = EN_FAIL;
+        return;
+    }
+
+    /* FIFO 空间检查 */
+    if (!Arm_CheckFifoSpace()) {
+        arm_output_diag.fifo_defer[i]++;
+        return;
+    }
+
+    last_tx[i] = now;
+    arm_output_diag.attempts[i]++;
+
+    /* DM 使能帧：FF FF FF FF FF FF FF FC */
+    uint8_t enable[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC};
+
+    if (canx_send_data(&hfdcan1, (uint16_t)(i + 1U), enable, 8U) == HAL_OK) {
+        /* 首次发送：记录 baseline 和时刻 */
+        if (arm_output_diag.state[i] == EN_WAIT_BOOT) {
+            baseline[i] = fb->update_count;
+            sent_at[i] = now;
+        }
+
+        arm_output_diag.state[i] = EN_SEND;
+
+        /* 紧跟一帧零增益 MIT 指令 */
+        mit_ctrl(&hfdcan1, (uint16_t)(i + 1U), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+    }
+}
+
+/* 发送控制帧（MIT 模式） */
+static void Arm_SendControlFrame(unsigned i, const joint_motor_measure_t *fb,
+                                 const Arm_Control_Snapshot *cmd, uint32_t now)
+{
+    /* FIFO 空间检查 */
+    if (!Arm_CheckFifoSpace()) {
+        arm_output_diag.fifo_defer[i]++;
+        return;
+    }
+
+    /* 指令超时判定 */
+    if (now - cmd->tick_ms > 100U) {
+        /* 超时：回落到实测位置 + 零增益/力矩 */
+        mit_ctrl(&hfdcan1, (uint16_t)(i + 1U), fb->position, 0.0f, 0.0f, 0.0f, 0.0f);
+    } else {
+        /* 正常：下发快照指令 */
+        mit_ctrl(&hfdcan1, (uint16_t)(i + 1U), cmd->pos[i], 0.0f,
+                 cmd->kp[i], cmd->kd[i], cmd->torque[i]);
+    }
+}
+// * 参数 now：当前毫秒时间（xTaskGetTickCount() * portTICK_PERIOD_MS）。
+// * 流程：总线健康 -> 拷贝反馈 -> 启动/总线恢复判定 -> retry/抑制判定 ->
+// *       逐关节（反馈超时、使能握手、控制帧发送）。
+// * 注意：本函数是唯一向 FDCAN1 发关节帧的地方，不可重入；
+// *       所有发送前都检查 TX FIFO 至少剩 2 个槽位。 */
 void Arm_Output_Step(uint32_t now)
 {
     /* 本地反馈快照：一次临界区拷贝 7 路，后续循环不再反复关中断。 */
@@ -138,31 +261,22 @@ void Arm_Output_Step(uint32_t now)
         // 7 个关节全部从 EN_WAIT_BOOT 开始，逐个进入使能握手
         for (unsigned i=0; i<7; ++i) restart(i, now, &fb[i]);
     }
-    /* can_recovery_epoch 变化说明总线刚经历过 bus-off/恢复：
-     * 立即抑制输出并把全部关节置 EN_FAIL，等上层重新发布无动力指令后再 retry。 */
-    if (seen_epoch != can_recovery_epoch) {
-        seen_epoch = can_recovery_epoch;
-        arm_output_diag.bus_inhibit = 1U;
-        for (unsigned i=0; i<7; ++i) arm_output_diag.state[i] = EN_FAIL;
-    }
+    /* CAN 恢复检测 */
+    Arm_CheckBusRecovery(now);
     // 总线健康认为当前不可发送（错误计数过高或尚未恢复）：整圈直接退出，不累加 attempts
     if (can_health[0].blocked) return;
     // 取指令快照（内部临界区）；后面用 cmd.tick_ms 判断指令是否新鲜
     Arm_Control_Snapshot cmd = Arm_Control_GetSnapshot();
-    /* retry：只接受“新鲜（≤100 ms）且 kp/kd/torque 全零”的指令来清故障，
-     * 防止在有力矩指令下盲目恢复输出。 */
+    /* Retry 判定 */
     if (retry_requested) {
         retry_requested = 0U;
-        /* Only a freshly published powerless command may acknowledge a fault. */
-        uint8_t safe = now - cmd.tick_ms <= 100U; // 指令发布超过 100 ms 视为过期，不允许用它清除故障
-        for (unsigned i=0; i<7; ++i)
-            // 任一路增益/力矩非零 -> 不是无动力指令，拒绝清除故障
-            if (cmd.kp[i] != 0.0f || cmd.kd[i] != 0.0f || cmd.torque[i] != 0.0f) safe = 0U;
-        // 接受 retry：清除总线抑制，把 EN_FAIL 的关节重新拉回 EN_WAIT_BOOT
-        if (safe) {
+        if (Arm_CheckRetryValid(&cmd, now)) {
             arm_output_diag.bus_inhibit = 0U;
-            for (unsigned i=0; i<7; ++i)
-                if (arm_output_diag.state[i] == EN_FAIL) restart(i, now, &fb[i]);
+            for (unsigned i = 0; i < 7; ++i) {
+                if (arm_output_diag.state[i] == EN_FAIL) {
+                    restart(i, now, &fb[i]);
+                }
+            }
         }
     }
     // 仍处于总线抑制状态：本圈不向电机发任何帧
@@ -179,78 +293,26 @@ void Arm_Output_Step(uint32_t now)
     /* 轮转遍历 7 个关节：起点每圈 +1，FIFO 紧张时不会总是前几个关节抢到发送机会。 */
     for (unsigned n=0; n<7; ++n) {
         unsigned i = (rotating_first + n) % 7U; // 本圈第 n 个处理的关节
+        /* 反馈超时检查 */
+        Arm_CheckFeedbackTimeout(i, &fb[i], now);
         uint8_t state = arm_output_diag.state[i];
-        // 反馈年龄（ms）：32 位无符号 tick 的回绕不影响差值正确性
-        uint32_t age = now - fb[i].update_tick;
-        /* EN_OK 的关节若反馈超时或电机报错（status != 1），立刻降级 EN_FAIL，等上层 retry。 */
-        if (state == EN_OK && (age > ARM_OUTPUT_FB_TIMEOUT_MS || fb[i].status != 1U)) {
-            arm_output_diag.state[i] = EN_FAIL;
-            state = EN_FAIL;
-        }
         // EN_FAIL 的关节本圈直接跳过：不自恢复，必须由上层重新授权
         if (state == EN_FAIL) { arm_output_diag.offline_skip[i]++; continue; }
-        /* 使能握手成功判据：反馈 ID 匹配、status==1、update_count 相对 baseline 有增加，
-         * 反馈年龄 ≤100 ms，且这一帧的时间戳晚于使能帧（有符号差值比较，兼容 tick 回绕）。 */
-        if (state == EN_SEND && fb[i].motorid == i + 1U && fb[i].status == 1U &&
-            fb[i].update_count != baseline[i] && age <= 100U &&
-            (int32_t)(fb[i].update_tick - sent_at[i]) > 0) { // 有符号差值：兼容 tick 回绕
+        /* 使能握手检查 */
+        if (Arm_CheckEnableHandshake(i, &fb[i], now)) {
             arm_output_diag.state[i] = EN_OK;
             state = EN_OK;
-            if (!arm_output_diag.first_feedback_ms[i]) arm_output_diag.first_feedback_ms[i] = now; // 记录首次收到反馈的时刻（诊断用）
+            if (!arm_output_diag.first_feedback_ms[i]) {
+                arm_output_diag.first_feedback_ms[i] = now;
+            }
         }
-        /* 尚未 OK 的关节：按 20 ms 节流重发使能帧；尝试 50 次仍无有效反馈则判失败
-         *（20 ms × 50 ≈ 1 s 的握手窗口）。 */
+        /* 未就绪关节处理 */
         if (state != EN_OK) {
-            // 20 ms 节流：避免同一关节把 TX FIFO 打满
-            if (now - last_tx[i] < 20U) continue;
-            /* Allow a final response window after attempt 50. */
-            // 50 次尝试后进入 EN_FAIL，需上层 retry 才允许重新握手
-            if (arm_output_diag.attempts[i] >= 50U) {
-                arm_output_diag.state[i] = EN_FAIL;
-                continue;
-            }
-            last_tx[i] = now;
-            arm_output_diag.attempts[i]++;
-            /* TX FIFO 不足 2 个槽位时推迟本关节：始终给其他有界流量
-             *（遥控/双板/抬升）留 1 个槽位。 */
-            if (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1) < 2U) {
-                arm_output_diag.fifo_defer[i]++;
-                continue;
-            }
-            /* DM 使能帧：8 字节固定 FF FF FF FF FF FF FF FC；
-             * 帧 ID 直接使用电机 ID（使能命令的模式号为 0）。 */
-            uint8_t enable[8] = {255,255,255,255,255,255,255,252};
-            // 电机 ID = 关节索引 + 1（0x01..0x07），标准帧
-            if (canx_send_data(&hfdcan1, (uint16_t)(i + 1U), enable, 8U) == HAL_OK) {
-                // 从 EN_WAIT_BOOT 首次发出使能帧：记录 baseline 与发送时刻
-                if (state == EN_WAIT_BOOT) {
-                    baseline[i] = fb[i].update_count;
-                    sent_at[i] = now;
-                }
-                arm_output_diag.state[i] = EN_SEND;
-                /* 使能帧后紧跟一帧零增益 MIT 指令：把电机切到 MIT 模式并保持零输出，
-                 * 不让上一帧的控制量继续生效。 */
-                mit_ctrl(&hfdcan1, (uint16_t)(i+1U), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
-            }
+            Arm_SendEnableFrame(i, &fb[i], now);
             continue;
         }
-        /* Keep one TX slot for other bounded traffic; retry latest snapshot
-           next period, rotating the first joint to avoid FIFO starvation. */
-        // 发送前再查一次 FIFO：上面的使能帧可能已占满槽位；不足则本圈跳过该关节
-        if (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1) < 2U) {
-            arm_output_diag.fifo_defer[i]++; // 记录因 FIFO 满被推迟的次数
-            continue;
-        }
-        /* 指令超过 100 ms 未更新（上位机/控制任务失联）：
-         * 退回“实测位置 + 零增益/零力矩”的自由拖动，不再执行过期指令。 */
-        if (now - cmd.tick_ms > 100U) {
-            // 零增益 MIT 帧：目标位置取当前实测值，速度/力矩为 0
-            mit_ctrl(&hfdcan1, (uint16_t)(i+1U), fb[i].position, 0.0f, 0.0f, 0.0f, 0.0f);
-        } else {
-            // 正常路径：下发快照的 pos/kp/kd/torque，速度项固定 0
-            mit_ctrl(&hfdcan1, (uint16_t)(i+1U), cmd.pos[i], 0.0f,
-                     cmd.kp[i], cmd.kd[i], cmd.torque[i]);
-        }
+        /* 发送控制帧 */
+        Arm_SendControlFrame(i, &fb[i], &cmd, now);
     }
     rotating_first = (uint8_t)((rotating_first + 1U) % 7U); // 轮转起点 +1，下一圈从下一个关节开始
 }

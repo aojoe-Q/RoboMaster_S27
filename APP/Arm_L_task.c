@@ -1,37 +1,3 @@
-/* ============================================================================
- * Arm_L_task.c —— 机械臂（左臂）主控制任务
- * ----------------------------------------------------------------------------
- * 职责：控制链路的上层。把「遥控器 / 上位机」的上层指令，结合限位与斜坡
- *       (arm_ramp) 换算成 7 个关节的目标位置，交给输出层
- *       （Arm_Publish -> arm_output -> 输出任务）按 MIT 模式周期下发到 CAN1。
- *
- * 任务：Arm_L_Task() 由 osThread 创建，优先级 osPriorityHigh；主循环用
- *       vTaskDelayUntil(..., 8 ms) 定周期，约 125 Hz。这个 8 ms 只是“目标
- *       刷新率”，真正的 CAN 发帧由输出层按自己的 4 ms 周期完成。
- *
- * 数据流：
- *   遥控器(VT13/DT7) ─┐
- *                     ├─> GetArmMode() 选模式 ─> TAKE/PASS/RESET/遥控/PC/Powerless
- *   上位机(USB/PC)  ──┘                                      │
- *                                                            ▼
- *                        ArmData.Jx.send_set / Kp / Kd / torque（7 个关节）
- *                                                            │
- *                                     Arm_Publish() 打成快照
- *                                                            ▼
- *                        arm_output（使能状态机、反馈超时、重试）-> MIT 帧 -> CAN1
- *
- * 关节：J1..J6 + 夹爪，电机 ID 0x01..0x07（数组下标 0..6），CAN 经典帧 1 Mbit/s。
- *       角度单位统一 rad，力矩单位 N·m。
- *
- * 读代码前先认这几个成员：
- *   send_set                本拍目标位置(rad)
- *   position                实测位置(rad)，由 data_updata() 从 joint_L_motor[] 拷贝
- *   Initial_Total_position  增量控制的基准位置
- *   RC_Sum_Value            遥控累加出来的相对角度（相对零点）
- *   Key_Control_Value       按键累加出来的相对角度（旧版按键模式遗留）
- *   *_L_position_set        斜坡状态量，.out 才是最终输出
- *   Kp/Kd/torque            MIT 模式的三个参数，随每帧一起下发
- * ==========================================================================*/
 #include "arm_output.h"
 #include "arm_motion.h"
 #include "FreeRTOS.h"
@@ -49,16 +15,6 @@
 #include "LK_motor.h"
 #include "referee_usart_task.h"
 #include "math.h"
-/**
- * @brief 锟斤拷锟斤拷锟斤拷锟脚猴拷应锟斤拷锟斤拷锟斤拷锟斤拷锟狡的宏定锟藉。
- *
- * ��������źŵľ���ֵ���ڸ�����������ֵ��dealine����������źŵ��������źţ�
- * ��������ź�Ϊ�㡣���ڷ�ֹС���ȵ����벨����ϵͳ��������Ҫ����Ӧ��
- *
- * @param input 锟斤拷锟斤拷锟脚号★拷
- * @param output ����źţ���������������Ľ����
- * @param dealine 锟斤拷锟斤拷锟斤拷值锟斤拷
- */
 /* rc_deadband_limit(input, output, dealine)：摇杆去死区——|input| 不超过 dealine 时
  * output 置 0，否则原样输出；用来滤掉摇杆回中附近的小抖振。 */
 #define rc_deadband_limit(input, output, dealine)    \
@@ -95,7 +51,7 @@
 /* 备用的一组斜坡状态量：全文件没有任何读写，保留占位。 */
   ramp_function_source_t J1_L_top_set;      //DM_4340p  
   ramp_function_source_t J2_L_top_set;	     //DM_J6248p
-  ramp_function_source_t J3_L_top_set;      //DM_8009
+  ramp_function_source_t J3_L_top_set;      //DM_6248p
   ramp_function_source_t J4_L_top_set;      //DM_4310P
   ramp_function_source_t J5_L_top_set;      //DM_4310P
   ramp_function_source_t J6_L_top_set;      //DM_4310P
@@ -115,11 +71,11 @@
   joint_motor_measure_t joint_L_motor[7]; // 7 个电机的反馈，下标 0..6 ↔ ID 1..7，由 CAN 接收路径写入
   
   
-/* 上电默认姿态(rad)：除 J6 = 0.4335 外均为 0，用作回零/模式切换的初始基准。 */
+/* 上电默认姿态(rad)：用作回零/模式切换的初始基准。 */
 
 float J1_L_initial_posture = 0.0,J2_L_initial_posture = 0.0f,
         J3_L_initial_posture = 0.0f,J4_L_initial_posture = 0.0f,
-        J5_L_initial_posture = 0.0f,J6_L_initial_posture = 0.43354702f,
+        J5_L_initial_posture = 0.0f,J6_L_initial_posture = 0.0f,
         grip_L_initial_posture = 0.0f;
 /* 目标值中间变量：各模式函数先算到这里，限位/斜坡处理后再写回 ArmData.*.send_set。 */
   fp32 J1_send_set, J2_send_set, J3_send_set, J4_send_set, J5_send_set, J6_send_set, Grip_send_set,
@@ -133,147 +89,305 @@ float J1_L_initial_posture = 0.0,J2_L_initial_posture = 0.0f,
   float Init_position; // 无引用的历史变量
   float Last_position;
 /* 各关节斜坡步长(rad/拍)：注意类型是 double，一拍 = 一次模式函数调用。 */
-  /*锟斤拷锟截斤拷斜锟斤拷锟斤拷锟斤拷*/
   double J1_ramp=0,J2_ramp=0,J3_ramp=0,J4_ramp=0,J5_ramp=0,J6_ramp=0,Grip_ramp=0; // 每拍最大转角，各模式函数里会按需重新赋值
   
-  int i=1;//锟斤拷锟皆ｏ拷
-	
-/* Only Arm_L_Task builds snapshots, including during startup/calibration. */
+  int i=1;
+
 static uint8_t grip_torque_mode;
-/* Arm_Publish() —— 把 ArmData 里 7 个关节的控制量打成快照交给输出层
- * 参数/返回：无
- * 调用：主循环每拍调用；初始化、堵转标零等阻塞流程里也会在中间步骤调用。
- * 说明：1) 快照结构见 arm_output.h，输出层只认 pos/kp/kd/torque 四个数组；
- *       2) 夹爪有一段“软过渡”：grip_torque_mode 打开时按 grip_blend 渐隐夹爪的
- *          Kp/Kd，并把力矩渐变到 0.2 N·m（纯力矩夹紧），关闭时反向恢复；
- *       3) 总线被禁(bus_inhibit)或启动失败时 blend 直接归零，不把坏参数发出去。
- */
-static void Arm_Publish(void)
+
+/* 把 7 个关节放进数组，后面的公共处理就不必重复写 J1、J2……Grip。 */
+static DM_contorl_t *const arm_joint_control[7] = {
+    &ArmData.J1, &ArmData.J2, &ArmData.J3, &ArmData.J4,
+    &ArmData.J5, &ArmData.J6, &ArmData.Grip
+};
+static ramp_function_source_t *const arm_joint_ramp[7] = {
+    &J1_L_position_set, &J2_L_position_set, &J3_L_position_set,
+    &J4_L_position_set, &J5_L_position_set, &J6_L_position_set,
+    &grip_L_position_set
+};
+
+/* 夹爪力矩混合系数 */
+static float s_grip_blend;
+
+/* 待发布的快照 */
+static Arm_Control_Snapshot arm_pending_command;
+
+/* 读取夹爪反馈 */
+static joint_motor_measure_t Arm_ReadGripFeedback(void)
 {
-    Arm_Control_Snapshot cmd = {0};
-    const DM_contorl_t *joint[7] = {&ArmData.J1,&ArmData.J2,&ArmData.J3,
-        &ArmData.J4,&ArmData.J5,&ArmData.J6,&ArmData.Grip}; // 指针数组统一遍历 7 个关节（下标 6 是夹爪）
-    static float grip_blend; // 夹爪“位置环 -> 力矩环”过渡系数 0..1
-    static uint32_t last_ms; // 上一拍时间戳(ms)
+    joint_motor_measure_t feedback;
+    taskENTER_CRITICAL();
+    feedback = joint_L_motor[6];
+    taskEXIT_CRITICAL();
+    return feedback;
+}
+
+/* 保存电机零点 */
+static void Arm_SaveMotorZero(void)
+{
+    for (uint8_t id = 1U; id <= 6U; ++id) {
+        save_motor_zero(&hfdcan1, id, 0U);
+        osDelay(5);
+    }
+}
+
+/* 同步反馈位置到 ArmData */
+static void Arm_SyncInitialPosition(void)
+{
+    taskENTER_CRITICAL();
+    for (uint8_t i = 0U; i < 7U; ++i) {
+        arm_joint_control[i]->position = joint_L_motor[i].position;
+        arm_joint_control[i]->send_set = arm_joint_control[i]->position;
+        arm_joint_control[i]->Initial_Total_position = arm_joint_control[i]->position;
+    }
+    taskEXIT_CRITICAL();
+}
+
+/* 每拍更新实测位置 */
+static void Arm_UpdateMeasuredPositions(void)
+{
+    taskENTER_CRITICAL();
+    for (uint8_t i = 0U; i < 7U; ++i) {
+        arm_joint_control[i]->position = joint_L_motor[i].position;
+    }
+    taskEXIT_CRITICAL();
+}
+
+/* 等待并收集 7 个电机的反馈数据
+ * 参数：timeout_ms  最多等待时间（ms）
+ * 返回：1 = 全部 7 个电机反馈到达，0 = 超时或部分缺失
+ * 说明：轮询 joint_L_motor[] 的时间戳，直到最后更新时间都在本次等待期间内。
+ */
+static uint8_t Arm_WaitMotorFeedback(uint32_t timeout_ms)
+{
+    uint32_t start_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    uint8_t feedback_ready[7] = {0};  // 标记各电机反馈是否已到达
+
+    while (xTaskGetTickCount() * portTICK_PERIOD_MS - start_ms < timeout_ms) {
+        uint8_t all_ready = 1U;
+        for (uint8_t i = 0U; i < 7U; ++i) {
+            uint32_t update_delay = xTaskGetTickCount() * portTICK_PERIOD_MS - joint_L_motor[i].update_tick;
+            /* 反馈在最近 100 ms 内更新过，则认为有效 */
+            if (update_delay <= 100U) {
+                feedback_ready[i] = 1U;
+            } else {
+                all_ready = 0U;
+            }
+        }
+        if (all_ready) return 1U;  // 全部就绪
+        osDelay(20);
+    }
+    return 0U;  // 超时：至少有一个电机反馈超时
+}
+
+/* 从 CAN 反馈同步所有 7 轴的当前位置到 ArmData
+ * 职责：原样拷贝 joint_L_motor[] -> ArmData.Jx.position（临界区保护）
+ */
+static void Arm_CollectMotorPositions(void)
+{
+    taskENTER_CRITICAL();
+    for (uint8_t i = 0U; i < 7U; ++i) {
+        arm_joint_control[i]->position = joint_L_motor[i].position;
+    }
+    taskEXIT_CRITICAL();
+}
+
+/* 初始化 7 轴的目标位置为当前实测值（防止上电瞬间位置阶跃）
+ * 职责：send_set / Initial_Total_position 都对齐到实测的 position
+ */
+static void Arm_InitTargetPositions(void)
+{
+    taskENTER_CRITICAL();
+    for (uint8_t i = 0U; i < 7U; ++i) {
+        arm_joint_control[i]->send_set = arm_joint_control[i]->position;
+        arm_joint_control[i]->Initial_Total_position = arm_joint_control[i]->position;
+    }
+    taskEXIT_CRITICAL();
+}
+
+/* 让 7 个斜坡从上电时的实测位置开始。 */
+static void Arm_InitPositionRamps(void)
+{
+    for (uint8_t i = 0U; i < 7U; ++i)
+    {
+        arm_data_ramp_init(arm_joint_ramp[i], 1.0f,
+                           arm_joint_control[i]->Initial_Total_position);
+    }
+
+    /* J4 的按键微调斜坡虽然暂未使用，仍保留原来的初始化。 */
+    arm_data_ramp_init(&J4_L_key2_1_set, 1.0f, ArmData.J4.Initial_Total_position);
+    arm_data_ramp_init(&J4_L_key2_0_set, 1.0f, ArmData.J4.Initial_Total_position);
+}
+
+/* 初始化正常控制所需的 PD 增益。 */
+static void Arm_InitJointGains(void)
+{
+    const fp32 kp[7] = {
+        J1_PID_KP, J2_PID_KP, J3_PID_KP, J4_PID_KP,
+        J5_PID_KP, J6_PID_KP, Grip_PID_KP
+    };
+    const fp32 kd[7] = {
+        J1_PID_KD, J2_PID_KD, J3_PID_KD, J4_PID_KD,
+        J5_PID_KD, J6_PID_KD, Grip_PID_KD
+    };
+
+    for (uint8_t i = 0U; i < 7U; ++i)
+    {
+        arm_joint_control[i]->Kp = kp[i];
+        arm_joint_control[i]->Kd = kd[i];
+    }
+}
+
+/* 回零完成后清除遥控和按键累加量。 */
+static void Arm_ClearControlOffsets(void)
+{
+    for (uint8_t i = 0U; i < 7U; ++i)
+    {
+        arm_joint_control[i]->RC_Sum_Value = 0.0f;
+        arm_joint_control[i]->Key_Control_Value = 0.0f;
+    }
+}
+
+/* 回零完成后让所有斜坡从零点重新开始。 */
+static void Arm_ResetPositionRamps(void)
+{
+    for (uint8_t i = 0U; i < 7U; ++i)
+    {
+        arm_data_ramp_init(arm_joint_ramp[i], 1.0f, 0.0f);
+    }
+}
+/* 模式变更处理 */
+
+/* 准备快照并发布 */
+static void Arm_PrepareAndPublish(void)
+{
+    static uint32_t last_ms;
     uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    float step = fminf((float)(now-last_ms) * 0.01f, 0.16f); /* 100 ms blend */
+    float dt_ms = (float)(now - last_ms);
     last_ms = now;
-    if (Arm_L_Ready && grip_torque_mode) grip_blend = fminf(1.0f, grip_blend + step); // 允许力矩模式时 blend 上升（每 ms 0.01，约 100 ms 到 1）
-    else grip_blend = fmaxf(0.0f, grip_blend - step);
-    if (arm_output_diag.bus_inhibit || arm_output_diag.startup_failed) grip_blend = 0.0f; // 总线被禁或启动失败：立刻清零，不带错误参数出门
-    for (unsigned j=0; j<7; ++j) {
-        cmd.pos[j]=joint[j]->send_set; // 快照只取 send_set/Kp/Kd/torque 四项
-        cmd.kp[j]=joint[j]->Kp;
-        cmd.kd[j]=joint[j]->Kd;
-        cmd.torque[j]=joint[j]->torque;
+
+    /* 更新夹爪混合系数 */
+    float step = fminf(dt_ms * 0.01f, 0.16f);
+    if (Arm_L_Ready && grip_torque_mode)
+        s_grip_blend = fminf(1.0f, s_grip_blend + step);
+    else
+        s_grip_blend = fmaxf(0.0f, s_grip_blend - step);
+    if (arm_output_diag.bus_inhibit || arm_output_diag.startup_failed)
+        s_grip_blend = 0.0f;
+
+    /* 收集快照 */
+    Arm_Control_Snapshot cmd = {0};
+    for (uint8_t i = 0U; i < 7U; ++i) {
+        cmd.pos[i] = arm_joint_control[i]->send_set;
+        cmd.kp[i] = arm_joint_control[i]->Kp;
+        cmd.kd[i] = arm_joint_control[i]->Kd;
+        cmd.torque[i] = arm_joint_control[i]->torque;
     }
+    cmd.tick_ms = now;
+
+    /* 叠加夹爪混合 */
     if (Arm_L_Ready) {
-        cmd.kp[6] *= 1.0f-grip_blend; // 夹爪 Kp 按 (1-blend) 渐隐：blend=1 时位置环完全让位给力矩
-        cmd.kd[6] *= 1.0f-grip_blend;
-        cmd.torque[6] = cmd.torque[6]*(1.0f-grip_blend)+0.2f*grip_blend; // 力矩从位置环输出渐变到 0.2 N·m 的恒定夹紧力
+        float blend = s_grip_blend;
+        cmd.kp[6] *= 1.0f - blend;
+        cmd.kd[6] *= 1.0f - blend;
+        cmd.torque[6] = cmd.torque[6] * (1.0f - blend) + 0.2f * blend;
     }
-    cmd.tick_ms=now; // 时间戳供输出层判断快照新鲜度
-    Arm_Control_Publish(&cmd);
+
+    /* 发布 */
+    arm_pending_command = cmd;
+    Arm_Control_Publish(&arm_pending_command);
+}
+
+/* 快速循环中发布上一次的快照（不重新计算） */
+static void Arm_PublishCurrent(void)
+{
+    Arm_Control_Publish(&arm_pending_command);
 }
 
 /* Arm_L_Task() —— 机械臂控制任务主循环（osPriorityHigh，8 ms 周期 ≈ 125 Hz）
- * 参数：argument 未使用（任务签名要求）
- * 流程：Arm_L_Init() 一次性初始化（含回零与夹爪标零）-> 无限循环：
+ * Arm_L_Init() 只在开始时执行一次，之后循环执行“读取 -> 模式 -> 发布”。
  *       data_updata() 取模式与实测 -> 未就绪/总线异常时强制 ARM_POWERLESS ->
- *       模式切换沿做一次状态同步 -> switch 分派各模式函数 -> Arm_Publish() 下发 ->
+ *       模式切换沿做一次状态同步 -> switch 分派各模式函数 -> 准备快照 -> 发布 ->
  *       从 POWERLESS 退出时请求输出层重试使能 -> vTaskDelayUntil 保持周期
  * 注意：本函数里的每个延时都会推迟整条控制链路，阻塞式流程（如
  *       Arm_return_initial_position）不能直接在主循环里调用。
  */
-void Arm_L_Task(void const * argument)
+void Arm_L_Task()
 {
-    (void)argument;
-	static uint8_t prev_ArmMode = 0xFF; // 上一拍模式；0xFF 保证第一拍必定走“切换沿”分支
-    static uint8_t was_powerless; // 上一拍是否已处于无力模式（只在上沿请求一次重试）
-	Arm_L_Init(); // 初始化会长时间阻塞（见 Arm_L_Init），返回时 Arm_L_Ready=1
+    Arm_L_Init();  // 初始化完成后，Arm_L_Ready = 1
+
+    static uint8_t prev_ArmMode = ARM_POWERLESS;  // 初始为无力模式
     TickType_t next = xTaskGetTickCount();
-	while (1)
-	{
-        data_updata(); // 刷新模式与 7 个关节实测位置（临界区内整体拷贝）
-        uint8_t selected_mode = ArmData.ArmMode; // 上层请求的模式；若下面被强制成 POWERLESS，靠它检测“进入”沿
+
+    while (1) {
+        data_updata();
+
         if (!Arm_L_Ready || arm_output_diag.bus_inhibit) {
-            ArmData.ArmMode = ARM_POWERLESS; // 未就绪或总线被禁：无条件转无力模式（最高优先级的安全兜底）
+            ArmData.ArmMode = ARM_POWERLESS;
             grip_torque_mode = 0U;
         }
 
-		/* ��⵽��ģʽ�л����ɵ�ǰλ�ó�ʼ�� RC_Sum_Value���ر����룩����ֹλ����Ծ */
-/* 模式切换沿：把各轴增量基准对齐到当前实测位置，防止切模式瞬间目标跳变。 */
-		if (ArmData.ArmMode != prev_ArmMode)
-		{
-/* 进入遥控模式：用“实测 - 零点 - 已有叠加量”反推累加器，使本拍目标正好等于当前姿态。 */
-			if (ArmData.ArmMode == ARM_L_MOVEMENT_J1_J4)
-			{
-				ArmData.J1.RC_Sum_Value = ArmData.J1.position - J1_zero_position;
-				ArmData.J2.RC_Sum_Value = ArmData.J2.position - J2_zero_position;
-				ArmData.J3.RC_Sum_Value = ArmData.J3.position - J3_zero_position;
-				ArmData.J4.RC_Sum_Value = ArmData.J4.position - J4_zero_position;
-				ArmData.J5.RC_Sum_Value = ArmData.J5.position - J5_zero_position - Custom_RC[4].DM_CC_receive - ArmData.J5.Key_Control_Value;
-				ArmData.J6.RC_Sum_Value = ArmData.J6.position - J6_zero_position - Custom_RC[5].DM_CC_receive - ArmData.J6.Key_Control_Value; // J5/J6 还要扣掉自定义控制器与按键分量，反推出的才是纯遥控累加值
-				ArmData.Grip.RC_Sum_Value = ArmData.Grip.position - grip_zero_position;
-			}
-/* 进入 PC 模式：清插补器与保持标志，下一帧有效目标重新起算。 */
-			else if (ArmData.ArmMode == ARM_MODE_PC_CONTROL)
-			{
-				Arm_PC_Control_Enter();
-			}
-			/* Leaving PC mode (or never in it): an enable from before the
-			   switch must not move the arm when it comes back. */
-			if (ArmData.ArmMode != ARM_MODE_PC_CONTROL)
-			{
-				Arm_USB_PC_Disarm(); // 离开 PC 模式时撤销上位机使能，下次进入必须重新使能
-			}
-			prev_ArmMode = ArmData.ArmMode;
-		}
-
-		switch (ArmData.ArmMode) // 按模式分派；未列出的模式落到 default（无力）
-        {
-					
-			case TAKE_WATER:
-				TAKE_WATER_1();
-				break;
-			case PASS_WATER:
-				PASS_WATER_1();
-				break;
-			case ARM_RESET:
-				ARM_RESET_1();
-				break;
-			case TAKE_Grip:
-				TAKE_Grip_1();
-			break;
-			case ARM_L_MOVEMENT_J1_J4:
-				Arm_L_Movement_J1_J4();
-			break;
-			case ARM_MODE_PC_CONTROL:
-				Arm_PC_Control();
-			break;
-
-			case ARM_POWERLESS:
-				Arm_Powerless();
-			break;
-			// Ĭ�������ֹͣ���˶�
-			default:
-				Arm_Powerless();
-            break;
+        /* 模式切换处理 */
+        if (ArmData.ArmMode != prev_ArmMode) {
+            if (ArmData.ArmMode == ARM_L_MOVEMENT_J1_J4) {
+                ArmData.J1.RC_Sum_Value = ArmData.J1.position - J1_zero_position;
+                ArmData.J2.RC_Sum_Value = ArmData.J2.position - J2_zero_position;
+                ArmData.J3.RC_Sum_Value = ArmData.J3.position - J3_zero_position;
+                ArmData.J4.RC_Sum_Value = ArmData.J4.position - J4_zero_position;
+                ArmData.J5.RC_Sum_Value = ArmData.J5.position - J5_zero_position - Custom_RC[4].DM_CC_receive - ArmData.J5.Key_Control_Value;
+                ArmData.J6.RC_Sum_Value = ArmData.J6.position - J6_zero_position - Custom_RC[5].DM_CC_receive - ArmData.J6.Key_Control_Value;
+                ArmData.Grip.RC_Sum_Value = ArmData.Grip.position - grip_zero_position;
+            }
+            if (ArmData.ArmMode == ARM_MODE_PC_CONTROL) {
+                Arm_PC_Control_Enter();
+            }
+            if (ArmData.ArmMode != ARM_MODE_PC_CONTROL) {
+                Arm_USB_PC_Disarm();
+            }
+            prev_ArmMode = ArmData.ArmMode;
         }
-        Arm_Publish();
-        if (Arm_L_Ready && selected_mode == ARM_POWERLESS && !was_powerless) { // 从“上层请求 POWERLESS”进入时请求输出层重试使能（只在沿上做一次）
+
+        /* 模式分派 */
+        switch (ArmData.ArmMode) {
+            case TAKE_WATER:
+                TAKE_WATER_1();
+                break;
+            case PASS_WATER:
+                PASS_WATER_1();
+                break;
+            case ARM_RESET:
+                ARM_RESET_1();
+                break;
+            case TAKE_Grip:
+                TAKE_Grip_1();
+                break;
+            case ARM_L_MOVEMENT_J1_J4:
+                Arm_L_Movement_J1_J4();
+                break;
+            case ARM_MODE_PC_CONTROL:
+                Arm_PC_Control();
+                break;
+            case ARM_POWERLESS:
+                Arm_Powerless();
+                break;
+            default:
+                Arm_Powerless();
+                break;
+        }
+
+        Arm_PrepareAndPublish();
+
+        /* 无力模式上升沿请求重试 */
+        if (Arm_L_Ready && ArmData.ArmMode == ARM_POWERLESS && prev_ArmMode != ARM_POWERLESS) {
             Arm_Output_RequestRetry();
-            was_powerless = 1U;
         }
-        if (selected_mode != ARM_POWERLESS) was_powerless = 0U; // 一离开 POWERLESS 就复位，下次再进入还能再触发一次重试
-        vTaskDelayUntil(&next, pdMS_TO_TICKS(8)); // 绝对延时 8 ms：扣掉本拍处理时间后补齐周期
-		
-	}
+
+        vTaskDelayUntil(&next, pdMS_TO_TICKS(8));
+    }
 }
 	
   
 
-/************************* 锟斤拷始锟斤拷 *************************/
 /* ======================= 夹爪堵转标零 ======================= */
 /* 上电后夹爪的零点未知。用恒定力矩朝 GRIP_ZERO_DIR 方向顶（不是位置环）：
    位置连续 5 拍（约 100 ms）不变，就认为顶到机械死点，把该位置存成零点（0xFE），然后立刻撤掉力矩。
@@ -295,7 +409,7 @@ void Arm_L_Task(void const * argument)
  *       -> 达到 GRIP_ZERO_STILL_CNT 认为顶到死点 -> 发 EEPROM 存零帧(0xFE) -> 撤力矩
  * 失败处理：整个过程最多 12 s；超时、使能丢失、反馈超时、存零后读回校验不过，
  *           都会置 arm_output_diag.startup_failed，由 Arm_L_Init() 转 POWERLESS。
- * 注意：期间 Arm_Publish() 照常发布，恒定力矩通过快照的 torque 字段生效。
+ * 注意：期间 Arm_PrepareCommand() 照常准备快照，恒定力矩通过 torque 字段生效。
  */
 static void Arm_Grip_Stall_Zero(void)
 {
@@ -306,14 +420,11 @@ static void Arm_Grip_Stall_Zero(void)
     ArmData.Grip.Kp = ArmData.Grip.Kd = 0.0f; // 关掉位置环：否则会与恒定力矩对抗
     ArmData.Grip.send_set = reference;
     ArmData.Grip.torque = (float)GRIP_ZERO_DIR * GRIP_ZERO_TORQUE; // 恒定力矩朝死点方向顶，正负由 GRIP_ZERO_DIR 决定
+    Arm_PrepareAndPublish(); // 首次发布：将新设置的力矩更新到快照中
     for (uint32_t n=0; n<GRIP_ZERO_MAX_STEP; ++n) {
-        Arm_Publish();
+        Arm_PrepareAndPublish();  // 每拍重新收集并发布，刷新时间戳防止输出层超时
         osDelay(GRIP_ZERO_STEP_MS); // 20 ms 采样节拍
-        joint_motor_measure_t feedback;
-/* 反馈由 CAN 接收路径更新，需进临界区整体拷贝，避免读到半更新的结构。 */
-        taskENTER_CRITICAL();
-        feedback = joint_L_motor[6];
-        taskEXIT_CRITICAL();
+        joint_motor_measure_t feedback = Arm_ReadGripFeedback();
         if (!Arm_Output_AllEnabled() ||
             xTaskGetTickCount()*portTICK_PERIOD_MS-feedback.update_tick > 40U) break; // 使能丢失或反馈超过 40 ms 未更新：立刻退出，不再标零
         if (feedback.update_count == last_count) continue; /* no stale stall samples */ // 没有新帧就跳过，避免用重复样本误判“没动”
@@ -329,17 +440,18 @@ static void Arm_Grip_Stall_Zero(void)
         }
     }
     ArmData.Grip.torque=0.0f; // 先撤力矩再判断结果，避免长时间顶着死点
-    Arm_Publish();
+    Arm_PrepareAndPublish();
     osDelay(8);
     if (moved && still>=GRIP_ZERO_STILL_CNT && Arm_Output_AllEnabled()) { // 必须“动过 + 顶死 + 仍使能”才写零点
-        uint8_t zero_frame[8]={255,255,255,255,255,255,255,254}; // 0xFE = 把当前位置保存为零点（DM 电机 EEPROM 命令帧）
+        uint8_t zero_frame[8] = {0xFF, 0xFF, 0xFF, 0xFF,
+                                 0xFF, 0xFF, 0xFF, 0xFE}; // 保存当前位置为零点
         uint32_t sent_ms=xTaskGetTickCount()*portTICK_PERIOD_MS;
         if (canx_send_data(&hfdcan1,7U,zero_frame,8U)==HAL_OK) { // 存零帧只发一次，之后靠读回确认
             /* EEPROM command is sent once; require a fresh zero-position reply. */
             for (unsigned n=0;n<10;++n) {
-                Arm_Publish();osDelay(10);
-                joint_motor_measure_t feedback;
-                taskENTER_CRITICAL(); feedback=joint_L_motor[6]; taskEXIT_CRITICAL();
+                Arm_PublishCurrent();  // 快速循环（10ms），仅发布
+                osDelay(10);
+                joint_motor_measure_t feedback = Arm_ReadGripFeedback();
                 if (!Arm_Output_AllEnabled()) break;
                 if (feedback.update_count!=last_count &&
                     (int32_t)(feedback.update_tick-sent_ms)>0 && fabsf(feedback.position)<0.05f) { // 必须是存零之后的新帧且读数接近 0 才认可
@@ -349,8 +461,8 @@ static void Arm_Grip_Stall_Zero(void)
         }
     }
     if (!zero_confirmed) arm_output_diag.startup_failed=1U; // 标零失败：置启动失败，Arm_L_Init 会转 POWERLESS
-    ArmData.Grip.send_set=joint_L_motor[6].position; // 无论成败都把目标同步到最新实测值
-    Arm_Publish();
+    ArmData.Grip.send_set = Arm_ReadGripFeedback().position; // 无论成败都把目标同步到最新实测值
+    Arm_PrepareAndPublish();
 }
 
 /* Arm_L_Init() —— 机械臂上电初始化（只在任务启动时调用一次）
@@ -366,165 +478,239 @@ static void Arm_Grip_Stall_Zero(void)
  */
 void Arm_L_Init(void)
 {
-    Arm_Publish();
-    osDelay(950); /* motor power-on settling window */
-    button_init(&left_button_btn); // 按键对象初始化（历史遗留，当前无人读取计数）
+    /* ================= 阶段 1：上电稳定期 ================= */
+    Arm_PrepareAndPublish();
+    osDelay(950); /* 电机驱动器上电稳定窗口 */
+    button_init(&left_button_btn);
     button_init(&right_button_btn);
-    Arm_Publish();
-    Arm_Output_Start(); // 让输出层开始逐电机发使能帧（使能间隔在输出层/输出任务里）
+
+    /* ================= 阶段 2：请求使能并等待反馈 ================= */
+    Arm_PrepareAndPublish();
+    Arm_Output_Start();  // 请求输出层使能
     uint32_t start_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    while (!Arm_Output_AllEnabled() && // 等 7 个电机全部使能成功，最多 1.5 s
-           xTaskGetTickCount()*portTICK_PERIOD_MS - start_ms < 1500U) {
-        Arm_Publish();
+    while (!Arm_Output_AllEnabled() &&
+           xTaskGetTickCount() * portTICK_PERIOD_MS - start_ms < 1500U)
+	{
+        Arm_PrepareAndPublish();
         osDelay(8);
     }
-    if (!Arm_Output_AllEnabled()) {
-        arm_output_diag.startup_failed = 1U; // 启动失败：置标志、转无力、直接返回（需要复位重试）
+    if (!Arm_Output_AllEnabled()) 
+	{
+        arm_output_diag.startup_failed = 1U;
         ArmData.ArmMode = ARM_POWERLESS;
         Arm_Powerless();
-        Arm_Publish();
-        return; /* reset required; no homing on partial feedback */
+        Arm_PrepareAndPublish();
+        return;  /* 使能失败，需要复位重试 */
     }
-/* 实测位置：CAN 反馈的电机角度(rad)，来自 joint_L_motor[]。 */
-	ArmData.J1.position=joint_L_motor[0].position;
-	ArmData.J2.position=joint_L_motor[1].position;
-	ArmData.J3.position=joint_L_motor[2].position;
-	ArmData.J4.position=joint_L_motor[3].position;
-	ArmData.J5.position=joint_L_motor[4].position;
-	ArmData.J6.position=joint_L_motor[5].position;
-	ArmData.Grip.position=joint_L_motor[6].position;
 
-/* 目标位置先同步为实测：保证使能后第一帧不产生位置阶跃。 */
-	ArmData.J1.send_set=joint_L_motor[0].position;
-	ArmData.J2.send_set=joint_L_motor[1].position;
-	ArmData.J3.send_set=joint_L_motor[2].position;
-	ArmData.J4.send_set=joint_L_motor[3].position;
-	ArmData.J5.send_set=joint_L_motor[4].position;
-	ArmData.J6.send_set=joint_L_motor[5].position;
-	ArmData.Grip.send_set=joint_L_motor[6].position;
+    /* ================= 阶段 3：保存零点并收集反馈 ================= */
+    Arm_SaveMotorZero();
 
-/* 增量控制基准也同步为实测：后续 RC_Sum_Value 都相对这里。 */
-	ArmData.J1.Initial_Total_position=ArmData.J1.position;
-	ArmData.J2.Initial_Total_position=ArmData.J2.position;	
-	ArmData.J3.Initial_Total_position=ArmData.J3.position;
-	ArmData.J4.Initial_Total_position=ArmData.J4.position;	
-	ArmData.J5.Initial_Total_position=ArmData.J5.position;
-	ArmData.J6.Initial_Total_position=ArmData.J6.position;	 
-	ArmData.Grip.Initial_Total_position=ArmData.Grip.position;	
+    /* 等待 7 个电机反馈到达（最多 1.5s），超时则失败返回 */
+    if (!Arm_WaitMotorFeedback(1500U)) {
+        arm_output_diag.startup_failed = 1U;
+        ArmData.ArmMode = ARM_POWERLESS;
+        Arm_Powerless();
+        Arm_PrepareAndPublish();
+        return;  /* 反馈超时 */
+    }
+
+    /* 从 CAN 反馈收集当前位置 */
+    Arm_CollectMotorPositions();
+
+    /* 初始化目标位置为当前实测位置（防止上电阶跃） */
+    Arm_InitTargetPositions();
 	
 //	RC_contorl.RC = get_RC_measure_point();  //VT13_rc_ctrl
 	
 
 
-	/* 夹爪：堵转找机械死点 -> 存零点 -> 撤力矩；再把初始位置同步成零点后的读数，
-	   这样下面的回零斜坡对夹爪是原地不动，不会顶着死点硬挤。 */
-	Arm_Grip_Stall_Zero();
+    /* ================= 阶段 4：夹爪堵转标零 ================= */
+    /* 夹爪：堵转找机械死点 -> 存零点 -> 撤力矩 */
+    Arm_Grip_Stall_Zero();
     if (arm_output_diag.startup_failed || !Arm_Output_AllEnabled()) {
         arm_output_diag.startup_failed = 1U;
         Arm_Powerless();
-        Arm_Publish();
-        return;
+        Arm_PrepareAndPublish();
+        return;  /* 夹爪标零失败 */
     }
-	ArmData.Grip.position = joint_L_motor[6].position;
-	ArmData.Grip.send_set = ArmData.Grip.position;
-	ArmData.Grip.Initial_Total_position = ArmData.Grip.position;
-/* 斜坡状态量起点 = 当前实测位置；frame_period=1 表示步长参数就是每拍增量。 */
-	arm_data_ramp_init(&J1_L_position_set,1,ArmData.J1.Initial_Total_position);	
-	arm_data_ramp_init(&J2_L_position_set,1,ArmData.J2.Initial_Total_position); 
-	arm_data_ramp_init(&J3_L_position_set,1,ArmData.J3.Initial_Total_position);	
-	arm_data_ramp_init(&J4_L_position_set,1,ArmData.J4.Initial_Total_position); 
-	arm_data_ramp_init(&J5_L_position_set,1,ArmData.J5.Initial_Total_position);	
-	arm_data_ramp_init(&J6_L_position_set,1,ArmData.J6.Initial_Total_position);
-	arm_data_ramp_init(&grip_L_position_set,1,ArmData.Grip.Initial_Total_position);
-	
-/* J4 按键微调的两条斜坡一并初始化（当前无其他引用）。 */
-	arm_data_ramp_init(&J4_L_key2_1_set,1,ArmData.J4.Initial_Total_position);
-	arm_data_ramp_init(&J4_L_key2_0_set,1,ArmData.J4.Initial_Total_position);
-	
-/* 关键顺序：目标位置必须先同步成实测，再给 Kp/Kd；否则使能瞬间位置环会猛拉。 */
-	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
-	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
-	ArmData.J3.Kp = J3_PID_KP;ArmData.J3.Kd = J3_PID_KD;
-	ArmData.J4.Kp = J4_PID_KP;ArmData.J4.Kd = J4_PID_KD;
-	ArmData.J5.Kp = J5_PID_KP;ArmData.J5.Kd = J5_PID_KD;
-	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
-	ArmData.Grip.Kp = Grip_PID_KP;ArmData.Grip.Kd = Grip_PID_KD;
 
-uint32_t home_start = xTaskGetTickCount()*portTICK_PERIOD_MS; // 回零超时计时起点（上限 20 s）
-do{
-    if (!Arm_Output_AllEnabled() || xTaskGetTickCount()*portTICK_PERIOD_MS-home_start > 20000U) { // 任一拍失能或超时：中止回零，转无力模式
+    /* 夹爪标零完成，收集最新反馈并初始化 */
+    Arm_CollectMotorPositions();
+    ArmData.Grip.position = Arm_ReadGripFeedback().position;
+    ArmData.Grip.send_set = ArmData.Grip.position;
+    ArmData.Grip.Initial_Total_position = ArmData.Grip.position;
+
+    /* ================= 阶段 5：初始化斜坡和增益，执行回零 ================= */
+    Arm_InitPositionRamps();
+    Arm_InitJointGains();
+
+    uint32_t home_start = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    uint32_t settle_start = 0U;     // 稳定计时起点
+    uint8_t all_settled = 0U;       // 是否满足到位条件
+    joint_motor_measure_t fb_snapshot[7]; // 反馈快照
+    uint32_t last_update_counts[7] = {0};  // 上次的 update_count，用于检测新反馈
+
+    do {
+        /* 超时或失能检查 */
+        if (!Arm_Output_AllEnabled() || xTaskGetTickCount() * portTICK_PERIOD_MS - home_start > 20000U) {
+            arm_output_diag.startup_failed = 1U;
+            Arm_Powerless();
+            Arm_PrepareAndPublish();
+            return;
+        }
+
+        /* 在临界区内复制七轴反馈，避免读到半更新状态 */
+        taskENTER_CRITICAL();
+        for (uint8_t i = 0; i < 7; ++i) {
+            fb_snapshot[i] = joint_L_motor[i];
+        }
+        taskEXIT_CRITICAL();
+
+        /* 反馈新鲜度检查：任何一轴超过 100 ms 未更新就重置稳定计时 */
+        uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        for (uint8_t i = 0; i < 7; ++i) {
+            if (now - fb_snapshot[i].update_tick > 100U) {
+                all_settled = 0U;
+                settle_start = 0U;
+                break;
+            }
+        }
+
+        /* 每拍朝零点走固定步长 */
+        arm_ramp_calc(&J1_L_position_set, 0.0038, J1_zero_position);
+        arm_ramp_calc(&J2_L_position_set, 0.0035, J2_zero_position);
+        arm_ramp_calc(&J3_L_position_set, 0.0035, J3_zero_position);
+        arm_ramp_calc(&J4_L_position_set, 0.0035, J4_zero_position);
+        arm_ramp_calc(&J5_L_position_set, 0.0035, J5_zero_position);
+        arm_ramp_calc(&J6_L_position_set, 0.0035, J6_zero_position);
+        arm_ramp_calc(&grip_L_position_set, 0.0035, grip_zero_position);
+
+        /* 把斜坡输出写回目标位置 */
+        ArmData.J1.send_set = J1_L_position_set.out;
+        ArmData.J2.send_set = J2_L_position_set.out;
+        ArmData.J3.send_set = J3_L_position_set.out;
+        ArmData.J4.send_set = J4_L_position_set.out;
+        ArmData.J5.send_set = J5_L_position_set.out;
+        ArmData.J6.send_set = J6_L_position_set.out;
+        ArmData.Grip.send_set = grip_L_position_set.out;
+
+        /* 硬限位检查 */
+        limitPosition(&ArmData.J1.send_set, J1_Max_position, J1_Min_position);
+        limitPosition(&ArmData.J2.send_set, J2_Max_position, J2_Min_position);
+        limitPosition(&ArmData.J3.send_set, J3_Max_position, J3_Min_position);
+        limitPosition(&ArmData.J4.send_set, J4_Max_position, J4_Min_position);
+        limitPosition(&ArmData.J5.send_set, J5_Max_position, J5_Min_position);
+        limitPosition(&ArmData.J6.send_set, J6_Max_position, J6_Min_position);
+        limitPosition(&ArmData.Grip.send_set, Grip_Max_position, Grip_Min_position);
+
+        /* 发布本拍目标，刷新时间戳保持命令有效 */
+        Arm_PrepareAndPublish();
+
+        /* 检查斜坡是否全部计算完成（输出已到达目标） */
+        uint8_t ramps_done = (J1_L_position_set.out == J1_zero_position &&
+                              J2_L_position_set.out == J2_zero_position &&
+                              J3_L_position_set.out == J3_zero_position &&
+                              J4_L_position_set.out == J4_zero_position &&
+                              J5_L_position_set.out == J5_zero_position &&
+                              J6_L_position_set.out == J6_zero_position &&
+                              grip_L_position_set.out == grip_zero_position);
+
+        /* 斜坡完成后，检查实际位置是否到位且稳定 */
+        if (ramps_done) {
+            float zero_targets[7] = {J1_zero_position, J2_zero_position, J3_zero_position,
+                                     J4_zero_position, J5_zero_position, J6_zero_position,
+                                     grip_zero_position};
+            uint8_t in_window = 1;
+            uint8_t has_new_feedback = 1;
+
+            /* 检查所有轴：位置误差、速度、是否有新反馈 */
+            for (uint8_t i = 0; i < 7; ++i) {
+                float err = fabsf(fb_snapshot[i].position - zero_targets[i]);
+                float vel = fabsf(fb_snapshot[i].velocity);
+                if (err >= 0.05f || vel >= 0.1f) {
+                    in_window = 0;
+                    break;
+                }
+                /* 如果 update_count 没变化，说明没有新反馈参与稳定确认 */
+                if (fb_snapshot[i].update_count == last_update_counts[i]) {
+                    has_new_feedback = 0;
+                }
+            }
+
+            if (in_window && has_new_feedback) {
+                if (!all_settled) {
+                    /* 首次进入窗口，开始计时 */
+                    all_settled = 1U;
+                    settle_start = xTaskGetTickCount() * portTICK_PERIOD_MS;
+                } else {
+                    /* 已在窗口内，检查是否已稳定 100 ms */
+                    if (xTaskGetTickCount() * portTICK_PERIOD_MS - settle_start >= 100U) {
+                        J1_J2_J3_J4_J5_J6_J7_init_flag = 0; // 退出循环
+                    }
+                }
+                /* 更新 last_update_counts */
+                for (uint8_t i = 0; i < 7; ++i) {
+                    last_update_counts[i] = fb_snapshot[i].update_count;
+                }
+            } else {
+                /* 越出窗口或没有新反馈，重置稳定状态 */
+                all_settled = 0U;
+                settle_start = 0U;
+            }
+        }
+
+        osDelay(5);
+    } while (J1_J2_J3_J4_J5_J6_J7_init_flag);
+
+    /* ================= 阶段 6：初始化完成，清空累加器 ================= */
+    Arm_ClearControlOffsets();
+    Arm_ResetPositionRamps();
+    Arm_PrepareAndPublish();
+    vTaskDelay(10);  /* 让最后一帧发出去 */
+
+    /* 置 READY 前最后一次健康检查 */
+    if (!Arm_Output_AllEnabled()) {
         arm_output_diag.startup_failed = 1U;
         Arm_Powerless();
-        Arm_Publish();
+        Arm_PrepareAndPublish();
         return;
     }
-/* 每拍朝 zero_position 走固定步长：0.0038/0.0035 rad/拍（5 ms 一拍）。 */
-	arm_ramp_calc(&J1_L_position_set,0.0038,J1_zero_position);
-	arm_ramp_calc(&J2_L_position_set,0.0035,J2_zero_position);
-	arm_ramp_calc(&J3_L_position_set,0.0035,J3_zero_position);
-	arm_ramp_calc(&J4_L_position_set,0.0035,J4_zero_position);
-	arm_ramp_calc(&J5_L_position_set,0.0035,J5_zero_position);
-	arm_ramp_calc(&J6_L_position_set,0.0035,J6_zero_position);
-	arm_ramp_calc(&grip_L_position_set,0.0035,grip_zero_position);
-	
-	ArmData.J1.send_set = J1_L_position_set.out; // 斜坡输出即本拍目标
-	ArmData.J2.send_set = J2_L_position_set.out;
-	ArmData.J3.send_set = J3_L_position_set.out;
-	ArmData.J4.send_set = J4_L_position_set.out;
-	ArmData.J5.send_set = J5_L_position_set.out;
-	ArmData.J6.send_set = J6_L_position_set.out;
-	ArmData.Grip.send_set = grip_L_position_set.out;
-	
-	limitPosition(&ArmData.J1.send_set,J1_Max_position,J1_Min_position); // 回零路径也要过一遍硬限位，保证不超程
-	limitPosition(&ArmData.J2.send_set,J2_Max_position,J2_Min_position);
-	limitPosition(&ArmData.J3.send_set,J3_Max_position,J3_Min_position);
-	limitPosition(&ArmData.J4.send_set,J4_Max_position,J4_Min_position);
-	limitPosition(&ArmData.J5.send_set,J5_Max_position,J5_Min_position);
-	limitPosition(&ArmData.J6.send_set,J6_Max_position,J6_Min_position);
-	limitPosition(&ArmData.Grip.send_set,Grip_Max_position,Grip_Min_position);
 
-	//�ж��Ƿ�ص���ʼ��̬
-/* 7 轴斜坡输出全部等于零点时结束回零循环。 */
-	if(J1_L_position_set.out == J1_zero_position && J2_L_position_set.out == J2_zero_position && J3_L_position_set.out == J3_zero_position && J4_L_position_set.out == J4_zero_position && J5_L_position_set.out == J5_zero_position && J6_L_position_set.out == J6_zero_position && grip_L_position_set.out == grip_zero_position)
-	{
-			J1_J2_J3_J4_J5_J6_J7_init_flag = 0; // 清循环标志，do-while 退出
-	}
-	Arm_Publish();
-	osDelay(5); // 5 ms 一拍，比主循环的 8 ms 更细，回零更平滑
-}while(J1_J2_J3_J4_J5_J6_J7_init_flag);
+    /* 重新读取反馈并确认到位状态 */
+    taskENTER_CRITICAL();
+    for (uint8_t i = 0; i < 7; ++i) {
+        fb_snapshot[i] = joint_L_motor[i];
+    }
+    taskEXIT_CRITICAL();
 
+    uint32_t final_check_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    float zero_targets[7] = {J1_zero_position, J2_zero_position, J3_zero_position,
+                             J4_zero_position, J5_zero_position, J6_zero_position,
+                             grip_zero_position};
 
-	/*锟斤拷锟斤拷锟斤拷锟斤拷*/
-	ArmData.J1.RC_Sum_Value = 0;
-	ArmData.J2.RC_Sum_Value = 0;
-	ArmData.J3.RC_Sum_Value = 0;
-	ArmData.J4.RC_Sum_Value = 0;
-	ArmData.J5.RC_Sum_Value = 0;
-	ArmData.J6.RC_Sum_Value = 0;
-	ArmData.Grip.RC_Sum_Value = 0;
+    for (uint8_t i = 0; i < 7; ++i) {
+        /* 反馈新鲜度检查 */
+        if (final_check_time - fb_snapshot[i].update_tick > 100U) {
+            arm_output_diag.startup_failed = 1U;
+            Arm_Powerless();
+            Arm_PrepareAndPublish();
+            return;
+        }
+        /* 位置和速度最终确认 */
+        float err = fabsf(fb_snapshot[i].position - zero_targets[i]);
+        float vel = fabsf(fb_snapshot[i].velocity);
+        if (err >= 0.05f || vel >= 0.1f) {
+            arm_output_diag.startup_failed = 1U;
+            Arm_Powerless();
+            Arm_PrepareAndPublish();
+            return;
+        }
+    }
 
-	ArmData.J1.Key_Control_Value = 0;
-	ArmData.J2.Key_Control_Value = 0;
-	ArmData.J3.Key_Control_Value = 0;
-	ArmData.J4.Key_Control_Value = 0;
-	ArmData.J5.Key_Control_Value = 0;
-	ArmData.J6.Key_Control_Value = 0;
-	ArmData.Grip.Key_Control_Value = 0;
-
-/* 回零结束：斜坡状态量重置到零点，下一次模式切换从零位起算。 */
-    arm_data_ramp_init(&J1_L_position_set,1,0);	
-	arm_data_ramp_init(&J2_L_position_set,1,0); 
-	arm_data_ramp_init(&J3_L_position_set,1,J3_zero_position);	
-	arm_data_ramp_init(&J4_L_position_set,1,0); 
-	arm_data_ramp_init(&J5_L_position_set,1,0);	
-	arm_data_ramp_init(&J6_L_position_set,1,0);
-	arm_data_ramp_init(&grip_L_position_set,1,0);
-	Arm_Publish();
-	vTaskDelay(10); // 让最后一帧快照发出去再置就绪
-	Arm_L_Ready = 1; // 就绪标志：主循环与输出层据此允许正常控制
+    Arm_L_Ready = 1;  /* 就绪标志 */
 }
 
-/************************* 锟斤拷锟捷革拷锟斤拷 *************************/
 /* data_updata() —— 每拍刷新“模式 + 实测位置”
  * 参数/返回：无
  * 调用：Arm_L_Task() 主循环每拍的第一件事。
@@ -533,30 +719,11 @@ do{
  */
 void data_updata(void)
 {
-//	RC_contorl.RC = get_RC_measure_point();
-//	left_button_stop_state = RC_contorl.RC->rc.left_button;
-//	right_button_stop_state = RC_contorl.RC->rc.right_button;
-//	// 锟斤拷锟铰帮拷锟斤拷锟斤拷锟斤拷锟斤拷
-//    button_update(&left_button_btn, left_button_stop_state);
-//	button_update(&right_button_btn, right_button_stop_state);
-//	// 锟斤拷取锟斤拷锟斤拷锟斤拷锟斤拷
-//    left_button_press_count = button_get_count(&left_button_btn);
-//	right_button_press_count = button_get_count(&right_button_btn);
-	
-	ArmData.ArmMode = GetArmMode(); // 拨杆组合 -> 模式（3 拍消抖，遥控失联立即无力）
-	
-	taskENTER_CRITICAL(); // 临界区：反馈结构由 CAN 接收路径更新，必须整体一致地拷贝
-	ArmData.J1.position = joint_L_motor[0].position;
-	ArmData.J2.position = joint_L_motor[1].position;
-	ArmData.J3.position = joint_L_motor[2].position;
-	ArmData.J4.position = joint_L_motor[3].position;
-	ArmData.J5.position = joint_L_motor[4].position;
-	ArmData.J6.position = joint_L_motor[5].position;
-	ArmData.Grip.position = joint_L_motor[6].position;
-    taskEXIT_CRITICAL(); // 退出临界区
+	/* 先读取当前模式，再读取同一时刻的 7 轴反馈。 */
+	ArmData.ArmMode = GetArmMode();
+	Arm_UpdateMeasuredPositions();
 }
 
-/************************* 妯″紡鍒ゆ柇 *************************/
 /* GetArmMode() —— 由 VT13 遥控器两个拨杆的组合解析工作模式
  * 参数/返回：返回消抖后的稳定模式（见 Arm_mode_t）
  * 调用：data_updata() 每拍调用
@@ -1173,7 +1340,6 @@ void Arm_L_Movement_J1_J4(void)
 	arm_ramp_calc(&grip_L_position_set,Grip_ramp,ArmData.Grip.send_set); // 夹爪单轴斜坡：步长 Grip_ramp
 	ArmData.Grip.send_set = grip_L_position_set.out;
 	
-	/*锟斤拷锟斤拷锟斤拷锟斤拷前位锟矫革拷锟斤拷锟斤拷锟斤拷模式*/
 /* 记录本拍实际下发值（仅调试回读用）。 */
 	ArmData.J1.Now_set_position = ArmData.J1.send_set;
 	ArmData.J2.Now_set_position = ArmData.J2.send_set;
@@ -1305,5 +1471,4 @@ void limitPosition(fp32* position, fp32 max_position, fp32 min_position)
         *position = min_position;  // ���������Сֵ����������Сֵ
     }
 }
-  
-  
+

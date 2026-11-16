@@ -267,18 +267,28 @@ static void BMI088_Offset_Update(BMI088_Info_Typedef *BMI088_Info)
 void BMI088_Init(void)
 {
   BMI088_Status_e status = BMI088_NO_ERROR;
+  uint32_t max_retries = 10U;  /* 最多重试 10 次 */
+  uint32_t retry_count = 0U;
 
-  /* Initializes the BMI088 */
- 
-	do{	
+  /* Initializes the BMI088 with finite retries */
+
+	do{
+    status = BMI088_NO_ERROR;  /* 每轮重置状态标志 */
     status |= BMI088_Accel_Init();
-		
+
     status |= BMI088_Gyro_Init();
 
     Delay_ms(2);
-	
+
+    retry_count++;
+
+    if (retry_count >= max_retries) {
+      /* 重试次数已满，输出错误但不继续卡住 */
+      break;
+    }
+
 	}while(status);
-  
+
 	BMI088_Offset_Update(&BMI088_Info);
 
 }

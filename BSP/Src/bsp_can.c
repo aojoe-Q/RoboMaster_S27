@@ -66,7 +66,22 @@ void BSP_FDCAN_Init(void)
         FDCAN_FilterTypeDef filter = {0};
         filter.IdType = FDCAN_STANDARD_ID;
         filter.FilterType = FDCAN_FILTER_MASK;
-        filter.FilterConfig = i == 1U ? FDCAN_FILTER_TO_RXFIFO1 : FDCAN_FILTER_TO_RXFIFO0;  // FDCAN2 用 RX FIFO1，其余用 FIFO0；掩码未填写等价于全收
+        filter.FilterConfig = i == 1U ? FDCAN_FILTER_TO_RXFIFO1 : FDCAN_FILTER_TO_RXFIFO0;  // FDCAN2 用 RX FIFO1，其余用 FIFO0
+
+        /* 为各总线配置硬件过滤器，拒绝不相关的 ID 以降低软件队列压力 */
+        if (i == 0U) {
+            /* FDCAN1：达妙关节 0x01..0x07（bit0-2 关键，bit3+ 无关） */
+            filter.FilterID1 = 0x000U;      // 基础 ID
+            filter.FilterID2 = 0x7F8U;      // 掩码：0x7F8 = 1111111000b，允许 0x00*..0x07*
+        } else if (i == 1U) {
+            /* FDCAN2：双板 0x207/0x208/0x209/0x210（CC float data）和 0x212/0x213（遥控数据） */
+            filter.FilterID1 = 0x200U;      // 基础 ID
+            filter.FilterID2 = 0x700U;      // 掩码：0x700 = 111 0000 0000b，允许 0x200..0x2FF 范围
+        } else {
+            /* FDCAN3：DJI 抬升电机 0x201..0x204（bit0-2 关键） */
+            filter.FilterID1 = 0x200U;
+            filter.FilterID2 = 0x7F8U;      // 掩码：0x7F8 = 1111111000b，允许 0x200..0x207
+        }
         checked(HAL_FDCAN_ConfigFilter(buses[i], &filter));
         checked(HAL_FDCAN_ConfigGlobalFilter(buses[i], FDCAN_REJECT, FDCAN_REJECT,
                                             FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE));  // 非匹配标准/扩展帧一律拒收，远程帧同样拒绝
