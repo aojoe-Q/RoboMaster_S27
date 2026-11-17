@@ -19,7 +19,7 @@
 /**
  * @brief remote control usart RxDMA MultiBuffer
  */
-__attribute__((section (".AXI_SRAM_DMA"))) uint8_t SBUS_MultiRx_Buf[2][SBUS_RX_BUF_NUM];
+__attribute__((section (".AXI_SRAM_DMA"))) uint8_t SBUS_MultiRx_Buf[2][SBUS_RX_DMA_SIZE];
  
 /* Private variables ---------------------------------------------------------*/
 /**

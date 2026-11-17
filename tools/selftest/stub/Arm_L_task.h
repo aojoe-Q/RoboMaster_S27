@@ -1,5 +1,5 @@
 /* Host-side stub of APP/Arm_L_task.h.
- * The joint limits must equal the real header: run_selftest.py compares them.
+ * Joint limits are generated from APP/Arm_L_task.h by run_selftest.py.
  */
 #ifndef STUB_ARM_L_TASK_H
 #define STUB_ARM_L_TASK_H
@@ -8,20 +8,8 @@
 
 typedef float fp32;
 
-#define J1_Max_position 2.81695309f
-#define J1_Min_position -2.96054893f
-#define J2_Max_position 1.7732357f
-#define J2_Min_position 0.0f
-#define J3_Max_position 2.39008179f
-#define J3_Min_position 0.0f
-#define J4_Max_position 4.3f
-#define J4_Min_position -4.3f
-#define J5_Max_position 1.23497334f
-#define J5_Min_position -1.29562798f
-#define J6_Max_position 2.22337666f
-#define J6_Min_position -2.25160637f
-#define Grip_Max_position 0.0f
-#define Grip_Min_position -12.0f
+/* Generated in build/, never maintained by hand. Run the Python test runner. */
+#include "arm_joint_limits_generated.h"
 
 typedef struct
 {

@@ -316,8 +316,17 @@ static bool write_file(const char *dir, const char *name, const uint8_t *data, u
 int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : ".";
-    const float ok_pos[7]  = { 0.10f, 0.50f, 0.60f, -1.0f, 0.20f, -0.30f, -0.35f };
-    const float ok_pos2[7] = { -0.20f, 1.00f, 1.20f, 2.0f, -0.50f, 1.00f, -0.10f };
+    /* Stay inside the current calibration, even after joint directions change. */
+    const float joint_min[7] = {J1_Min_position, J2_Min_position, J3_Min_position,
+        J4_Min_position, J5_Min_position, J6_Min_position, Grip_Min_position};
+    const float joint_max[7] = {J1_Max_position, J2_Max_position, J3_Max_position,
+        J4_Max_position, J5_Max_position, J6_Max_position, Grip_Max_position};
+    float ok_pos[7], ok_pos2[7];
+    for (unsigned j = 0; j < 7; ++j) {
+        float span = joint_max[j] - joint_min[j];
+        ok_pos[j] = joint_min[j] + 0.25f * span;
+        ok_pos2[j] = joint_min[j] + 0.75f * span;
+    }
     uint8_t frame[ARM_PROTO_MAX_FRAME];
     uint16_t flen;
     float got[7];

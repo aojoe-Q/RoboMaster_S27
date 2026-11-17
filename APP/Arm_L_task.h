@@ -26,32 +26,20 @@
 
 /* 关节位置硬限位（rad，电机侧读数）：limitPosition() 用它把目标钳在机械可达范围内，
  */
-#define J1_Max_position 2.81695309f		
-#define J1_Min_position -2.96054893f		     
-#define J2_Max_position 0.0f		
-#define J2_Min_position -2.10669899f		     
-#define J3_Max_position 0.0f		
-#define J3_Min_position -3.04016972f		  
-#define J4_Max_position 3.02567291f		 
-#define J4_Min_position 0.0f		 
-#define J5_Max_position 1.49938965f		
-#define J5_Min_position -0.994316101f	 
-#define J6_Max_position 2.42408657f		
-#define J6_Min_position -0.710879326f 
-#define Grip_Max_position 0.0f    	 
+#define J1_Max_position 2.81695309f
+#define J1_Min_position -2.96054893f
+#define J2_Max_position 0.0f
+#define J2_Min_position -2.05669899f
+#define J3_Max_position 0.0f
+#define J3_Min_position -3.00016972f
+#define J4_Max_position 3.00567291f
+#define J4_Min_position 0.0f
+#define J5_Max_position 1.40938965f
+#define J5_Min_position -0.904316101f
+#define J6_Max_position 2.32408657f
+#define J6_Min_position -0.650879326f
+#define Grip_Max_position 0.0f
 #define Grip_Min_position -12.0f		 // 夹爪量程下限：负方向为闭合，数值取得很大，只作兜底
-/* J1/J2 碰撞禁区（仅遥控模式生效）：当 J2 实测值低于 J1_J2_ZONE_J2_MAX 时，
- * J1 的下限从 J1_Min_position 收紧到 J1_J2_ZONE_J1_MIN，防止两节臂段在低姿态相撞。
- * PC 模式（Arm_PC_Control）不启用该逻辑，仍使用静态 J1 限位。
- */
-/* J1/J2 collision zone: while measured J2 is below J1_J2_ZONE_J2_MAX the
-   J1 lower limit tightens to J1_J2_ZONE_J1_MIN. RC mode only; PC mode
-   (Arm_PC_Control) applies the static J1 limits. */
-#define J1_J2_ZONE_J2_MAX  0.496871948f // 触发 J1 限位收紧的 J2 阈值（rad）
-#define J1_J2_ZONE_J1_MIN  (-0.17605114f) // 禁区内的 J1 下限（比 J1_Min_position 更保守）
-#define Special_J2_limit 0.0635156631 // J2 贴近基座的判定阈值（旧版按键模式使用，现仅存于注释代码）
-#define J1_Special_Max_position 0.215261688 // 贴近基座时 J1 允许的区间（旧版按键模式使用，现仅存于注释代码）
-#define J1_Special_Min_position -0.215261688 
 
 
 /* 各关节 MIT 模式的 PD 增益：Kp [N·m/rad]，Kd [N·m·s/rad]。
@@ -60,8 +48,8 @@
  */
 #define J1_PID_KP 68.0f		//J1 KP
 #define J1_PID_KD 4.0f		//J1 KD
-#define J2_PID_KP 200.0f	//J2 KP
-#define J2_PID_KD 4.0f		//J2 KD
+#define J2_PID_KP 400.0f	//J2 KP
+#define J2_PID_KD 5.2f		//J2 KD
 #define J3_PID_KP 100.0f	//J3 KP 200
 #define J3_PID_KD 3.0f		//J3 KD
 #define J4_PID_KP 32.0f		//J4 KP
@@ -87,7 +75,6 @@
 #define Grip_clamp_position 0.1f // 夹紧位置
 
 
-#define J4_half_turn 4.42530632f    // J4 半圈对应的弧度值（旧版按键模式用它扩大限位，现仅存于注释代码）
 
 /* 预设位姿表（rad）：左侧工位 L_* / 右侧工位 R_*，每个工位两个候选点（_1/_2）。
  * save_position 为“放置/存放”位姿，get_position 为“取物”位姿；
@@ -125,52 +112,20 @@
 #define L_J6_get_position_2 0.804341316f
 #define L_Grip_get_position_2 0.67f
 
-#define R_J1_save_position_1 2.77771378f
-#define R_J2_save_position_1 0.84295858f
-#define R_J3_save_position_1 0.646714455f
-#define R_J4_save_position_1 -0.00438690186f
-#define R_J5_save_position_1 -1.07709599f
-#define R_J6_save_position_1 -0.741397858f
-#define R_Grip_save_position_1 0.67f
-
-#define R_J1_save_position_2 2.76932144f
-#define R_J2_save_position_2 0.96061578f
-#define R_J3_save_position_2 0.500839355f
-#define R_J4_save_position_2 0.0036239624f
-#define R_J5_save_position_2 -0.858510971f
-#define R_J6_save_position_2 -0.699435234f
-#define R_Grip_save_position_2 0.01f
-
-#define R_J1_get_position_1 2.77771378f
-#define R_J2_get_position_1 0.84295858f
-#define R_J3_get_position_1 0.646714455f
-#define R_J4_get_position_1 -0.00438690186f
-#define R_J5_get_position_1 -1.07709599f
-#define R_J6_get_position_1 -0.741397858f
-#define R_Grip_get_position_1 0.0f
-
-#define R_J1_get_position_2 2.76932144f
-#define R_J2_get_position_2 0.96261578f
-#define R_J3_get_position_2 0.498839355f
-#define R_J4_get_position_2 0.0036239624f
-#define R_J5_get_position_2 -0.858510971f
-#define R_J6_get_position_2 -0.699435234f
-#define R_Grip_get_position_2 0.67f
-//TAKE WATER
-/* 取水（TAKE_WATER）模式的目标位姿：7 个关节目标值 + 夹爪夹紧值。 */
-#define J1_TAKE_position 0.0f
-#define J2_TAKE_position 1.8732357f
-#define J3_TAKE_position 0.599870682f
-#define J4_TAKE_position -1.98577118f
-#define J5_TAKE_position -0.972190857f
-#define J6_TAKE_position  0.0143051147f
-#define Grip_TAKE_position_1 0.714694023f
+//TAKE POSE_1
+#define J1_POSE_position 0.0f
+#define J2_POSE_position -0.56973362f
+#define J3_POSE_position -0.309948921f
+#define J4_POSE_position -0.0f
+#define J5_POSE_position 0.0783929825f
+#define J6_POSE_position  2.22877121f
+#define Grip_POSE_position_1 -1.0f
 //RESET ARM
 /* 复位（ARM_RESET）模式的目标位姿：把机械臂收到收纳姿态，夹爪保持约夹紧位。 */
 #define J1_reset_position 0.0f
 #define J2_reset_position 0.0852594376f
 #define J3_reset_position 0.151254654f	
-#define J4_reset_position -1.85950279f
+#define J4_reset_position -0.119974136f
 #define J5_reset_position -0.0f
 #define J6_reset_position 0.0f
 #define Grip_reset_position 0.714694023f
@@ -194,7 +149,7 @@ typedef enum
 	ARM_RETURN_INITIAL_POSTURE,  
 	CHASSIS_MOVEMENT_ARM_KEEP,   
 	ARM_POWERLESS, // 无力：Kp/Kd=0，不下发力矩，只保持通信
-	TAKE_WATER,// 取水流程（TAKE_WATER_1）
+	TAKE_POSE,// 取水流程（TAKE_WATER_1）
 	PASS_WATER, // 递水流程（PASS_WATER_1）
 	ARM_RESET, // 复位流程（ARM_RESET_1）
 	TAKE_Grip, // 夹爪取物流程（TAKE_Grip_1）
@@ -261,6 +216,40 @@ extern Custom_controller_t Custom_RC[6]; // 6 路自定义控制器输入（下�
 extern	ArmData_t ArmData; // 全局机械臂数据（定义在 Arm_L_task.c）
 extern volatile uint8_t Arm_L_Ready; // 初始化完成标志：1 = 已使能且目标已与实测同步
 
+/* 夹爪找零诊断：只供 Watch 观察，结果保留到下次找零，不参与控制。 */
+typedef enum {
+    GRIP_ZERO_IDLE = 0,
+    GRIP_ZERO_RUNNING = 1,
+    GRIP_ZERO_OK = 2,
+    GRIP_ZERO_ENABLE_LOST = 3,       // 找限位期间七轴就绪检查失败
+    GRIP_ZERO_FEEDBACK_STALE = 4,    // 夹爪反馈超过 40 ms
+    /* 原诊断值 5（位移不足）已取消，其他诊断编号保持不变。 */
+    GRIP_ZERO_STALL_TIMEOUT = 6,     // 12 s 内未完成停稳确认
+    GRIP_ZERO_SEND_FAILED = 7,       // 存零帧未成功入队
+    GRIP_ZERO_READBACK_TIMEOUT = 8,  // 存零后未收到符合要求的零点反馈
+    GRIP_ZERO_VERIFY_ENABLE_LOST = 9 // 停稳后或存零校验期间失去七轴就绪
+} ArmGripZeroResult;
+
+typedef struct {
+    ArmGripZeroResult result;
+    float start_position, last_position, max_travel;
+    uint32_t elapsed_ms, feedback_age_ms;
+    uint8_t still, zero_sent;
+} ArmGripZeroDiagnostics;
+extern volatile ArmGripZeroDiagnostics arm_grip_zero_diag;
+
+/* 回零结果：0 未开始，1 回零中，2 成功，3 回零中失去就绪，4 超时，
+ * 5 最终就绪检查失败，6 最终反馈过期，7 最终位置/速度超限。
+ * 下标 0..6 对应 J1..J6、夹爪；失败后保留现场，不被无力模式覆盖。 */
+typedef struct {
+    uint32_t elapsed_ms, settle_ms;
+    float error[7], velocity[7];
+    uint32_t feedback_age_ms[7];
+    uint8_t state[7], status[7];
+    uint8_t result, ramps_done, in_window, has_new_feedback;
+} ArmHomeDiagnostics;
+extern volatile ArmHomeDiagnostics arm_home_diag;
+
 /* 对外接口
  * Arm_L_Task 是 FreeRTOS 任务入口（osPriorityHigh，主循环 osDelay(8) ≈ 125 Hz），
  * 内部按 ArmData.ArmMode 分派；其余函数是各模式的具体实现，通常只被该任务调用。
@@ -280,7 +269,7 @@ void Chassis_Movement(void); // 底盘运动时保持机械臂姿态（空实现
 void Arm_Powerless(void); // 无力模式：Kp/Kd=0，输出零力矩
 void Arm_PC_Control(void);        // PC control mode (ROS 2 / MoveIt) // PC（ROS 2 / MoveIt）控制：目标直接赋 send_set，不做斜坡
 void Arm_PC_Control_Enter(void);  // call once when entering PC mode // 进入 PC 模式时调用一次：初始化 PC 侧的运动插补状态
-void TAKE_WATER_1(void); // 取水动作
+void TAKE_POSE_1(void); // 取水动作
 void PASS_WATER_1(void); // 递水动作
 //void TAKE_GRIP(void);
 void ARM_RESET_1(void); // 复位动作

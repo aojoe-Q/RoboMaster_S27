@@ -5,7 +5,8 @@
 2. Decodes the STATE frames the firmware produced and re-encodes them in
    Python: both sides must give the same bytes.
 3. Feeds frames built by Python into the firmware and checks its answers.
-4. Checks the joint limits in stub/Arm_L_task.h still match APP/Arm_L_task.h.
+4. Generates the stub's joint limits and valid/invalid test targets from
+   APP/Arm_L_task.h on every run. Calibration is maintained only in that header.
 
 Nothing runs on the STM32; this does not replace a Keil build.
 
@@ -15,6 +16,7 @@ Usage:  python tools/selftest/run_selftest.py
 from __future__ import annotations
 
 import os
+import math
 import re
 import shutil
 import struct
@@ -54,24 +56,38 @@ def find_compiler():
     raise Failure("no C compiler found (set CC or install gcc)")
 
 
-def check_limits():
-    pattern = re.compile(r"#define\s+((?:J\d|Grip)_(?:Max|Min)_position)\s+(-?[0-9.]+)f?")
-
-    def read(path):
-        with open(path, "rb") as f:
-            text = f.read().decode("latin-1")
-        return {name: float(value) for name, value in pattern.findall(text)}
-
-    real = read(os.path.join(APP, "Arm_L_task.h"))
-    stub = read(os.path.join(STUB, "Arm_L_task.h"))
-    check(len(real) == 14, "expected 14 joint limits in APP/Arm_L_task.h, found %d" % len(real))
-    check(real == stub, "stub joint limits differ from APP/Arm_L_task.h: %s"
-          % sorted(set(real.items()) ^ set(stub.items())))
-    print("joint limits in the stub match APP/Arm_L_task.h")
-
-    # ARM_MODE_PC_CONTROL position in the real Arm_mode_t enum
+def read_limits():
+    """Read decimal calibration constants; reject unsupported syntax explicitly."""
     with open(os.path.join(APP, "Arm_L_task.h"), "rb") as f:
         text = f.read().decode("latin-1")
+    uncommented = re.sub(r"/\*.*?\*/|//[^\n]*", "", text, flags=re.S)
+    number = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?[fF]?"
+    limits = {}
+    definitions = []
+    for joint in ("J1", "J2", "J3", "J4", "J5", "J6", "Grip"):
+        for bound in ("Min", "Max"):
+            name = joint + "_" + bound + "_position"
+            matches = re.findall(r"^[ \t]*#define[ \t]+" + name +
+                                 r"[ \t]+([^\n]+)", uncommented, re.M)
+            check(len(matches) == 1, "expected one definition of " + name)
+            expression = matches[0].strip()
+            literal = expression
+            while literal.startswith("(") and literal.endswith(")"):
+                literal = literal[1:-1].strip()
+            check(re.fullmatch(number, literal) is not None,
+                  name + " must be a decimal constant, got " + expression)
+            value = float(literal.rstrip("fF"))
+            check(math.isfinite(value) and abs(value) < 2000,
+                  name + " is outside the USB position encoding range")
+            limits[name] = f32(value)
+            definitions.append("#define " + name + " " + expression)
+        check(limits[joint + "_Min_position"] < limits[joint + "_Max_position"],
+              joint + " calibration requires Min < Max")
+    return limits, definitions, text
+
+
+def check_modes(text):
+    # ARM_MODE_PC_CONTROL position in the real Arm_mode_t enum
     body = text[text.index("typedef enum"):text.index("}Arm_mode_t")]
     names = re.findall(r"^\s*([A-Z][A-Za-z0-9_]+)\s*,", body, re.M)
     check("ARM_MODE_PC_CONTROL" in names and names.index("ARM_MODE_PC_CONTROL") == 10,
@@ -80,11 +96,16 @@ def check_limits():
           "python ARM_MODE_NAMES has %d entries, Arm_mode_t %d"
           % (len(proto.ARM_MODE_NAMES), len(names)))
     print("Arm_mode_t: PC_CONTROL = 10, python mode table has the same length")
-    return real
 
 
-def build(compiler):
+def build(compiler, definitions):
     os.makedirs(BUILD, exist_ok=True)
+    with open(os.path.join(BUILD, "arm_joint_limits_generated.h"), "w", encoding="ascii") as f:
+        f.write("/* Generated from APP/Arm_L_task.h; do not edit. */\n"
+                "#ifndef ARM_JOINT_LIMITS_GENERATED_H\n"
+                "#define ARM_JOINT_LIMITS_GENERATED_H\n" +
+                "\n".join(definitions) + "\n#endif\n")
+    print("generated 14 joint limits from APP/Arm_L_task.h")
     for name in FIRMWARE:
         shutil.copy(os.path.join(APP, name), BUILD)
     exe = os.path.join(BUILD, "usb_selftest.exe")
@@ -100,12 +121,13 @@ def build(compiler):
     return exe
 
 
-def write_host_frames():
+def write_host_frames(limits):
     clock = [100.0]
     enc = proto.HostEncoder(clock=lambda: clock[0])
-    ok = [0.10, 0.50, 0.60, -1.0, 0.20, -0.30, -0.35]
+    ok = [(limits[j + "_Min_position"] + limits[j + "_Max_position"]) * 0.5
+          for j in ("J1", "J2", "J3", "J4", "J5", "J6", "Grip")]
     bad = list(ok)
-    bad[4] = 1.30                                   # J5 max is 1.23497334
+    bad[4] = limits["J5_Max_position"] + 0.01
 
     data = enc.enable(True)                         # seq 0 -> ACK OK
     data += b"\x00\x13\xa5\xa5\x37"                  # junk with false SOFs
@@ -228,9 +250,10 @@ def main():
         check(proto.crc16(b"123456789") == 0x29B1, "python crc16 check value")
         compiler = find_compiler()
         print("compiler: %s" % compiler)
-        check_limits()
-        exe = build(compiler)
-        ok = write_host_frames()
+        limits, definitions, header = read_limits()
+        check_modes(header)
+        exe = build(compiler, definitions)
+        ok = write_host_frames(limits)
         run(exe)
         verify_state_frames()
         verify_cross(ok)

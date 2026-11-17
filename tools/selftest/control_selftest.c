@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+/* Avoid the Windows CRT assertion dialog during unattended host tests. */
+#undef assert
+#define assert(c) do { if (!(c)) { fprintf(stderr,"%s:%d: %s\n",__FILE__,__LINE__,#c); exit(1); } } while(0)
 
 static Registers regs[3];
 FDCAN_HandleTypeDef hfdcan1={&regs[0]},hfdcan2={&regs[1]},hfdcan3={&regs[2]};
@@ -16,6 +19,9 @@ joint_motor_measure_t joint_L_motor[7];
 static uint32_t now, free_slots=8U, sends[7], enables[7], total, rx_count[3], decoded[3];
 static uint8_t last[8], malformed, cancel_stuck;
 static int fail_tx;
+static unsigned nonzero_kp_frames;
+static unsigned nonzero_output_frames;
+static uint8_t fail_enable_id;
 uint32_t xTaskGetTickCount(void) { return now; }
 uint32_t xTaskGetTickCountFromISR(void) { return now; }
 void vTaskDelayUntil(TickType_t *p,TickType_t n) { *p+=n; }
@@ -36,12 +42,22 @@ HAL_StatusTypeDef HAL_FDCAN_AddMessageToTxFifoQ(FDCAN_HandleTypeDef *h,FDCAN_TxH
 {
     (void)h;
     if (fail_tx || !free_slots) return HAL_ERROR;
+    if (hdr->Identifier==fail_enable_id && data[0]==255 && data[6]==255 && data[7]==252)
+        return HAL_ERROR;
     free_slots--; total++;
     memcpy(last,data,8);
     if (hdr->Identifier>=1 && hdr->Identifier<=7) {
         unsigned j=hdr->Identifier-1;
         sends[j]++;
         if (data[0]==255 && data[6]==255 && data[7]==252) enables[j]++;
+        else {
+            unsigned kp=(((unsigned)data[3]&15U)<<8)|data[4];
+            unsigned kd=((unsigned)data[5]<<4)|(data[6]>>4);
+            unsigned torque=(((unsigned)data[6]&15U)<<8)|data[7];
+            if (kp) nonzero_kp_frames++;
+            if (kp || kd || torque!=float_to_uint_clamped(0,T_MIN,T_MAX,12))
+                nonzero_output_frames++;
+        }
     }
     return HAL_OK;
 }
@@ -158,6 +174,8 @@ static void fifo(void) {
 static void bus_test(void) {
     boot();
     for (unsigned attempt=0;attempt<4;attempt++) {
+        /* A request queued before this fault cannot authorize its new epoch. */
+        Arm_Output_RequestRetry();
         regs[0].PSR=FDCAN_PSR_BO;regs[0].CCCR=FDCAN_CCCR_INIT;regs[0].TXBRP=255;
         HAL_FDCAN_ErrorStatusCallback(&hfdcan1,FDCAN_IT_BUS_OFF);
         unsigned old=total;now+=4;step();assert(total==old);
@@ -175,6 +193,26 @@ static void bus_test(void) {
     assert(can_health[1].blocked && (can_health[1].flags & CAN_HEALTH_RECOVERY_TIMEOUT));
     assert(regs[1].CCCR & FDCAN_CCCR_INIT);
 }
+static void fault_zero(void) {
+    boot();
+    Arm_Control_Snapshot c={0};
+    now+=4;c.tick_ms=now;
+    for(unsigned j=0;j<7;j++) { feedback(j);c.kp[j]=10.0f; }
+    Arm_Control_Publish(&c);free_slots=32;Arm_Output_Step(now);
+    assert(nonzero_kp_frames>0);
+    joint_L_motor[0].status=0;
+    nonzero_kp_frames=0;now+=4;free_slots=32;Arm_Output_Step(now);
+    assert(arm_output_diag.state[0]==EN_FAIL && nonzero_kp_frames==0);
+    now+=4;free_slots=32;Arm_Output_Step(now);
+    assert(nonzero_kp_frames==0);
+    /* Invalid retry cannot clear a failed joint while gains are nonzero. */
+    Arm_Output_RequestRetry();now+=4;Arm_Output_Step(now);
+    assert(arm_output_diag.state[0]==EN_FAIL);
+    /* Publishing zero first makes an immediate output step accept the retry. */
+    memset(&c,0,sizeof(c));c.tick_ms=now;Arm_Control_Publish(&c);
+    Arm_Output_RequestRetry();free_slots=32;Arm_Output_Step(now);
+    assert(arm_output_diag.state[0]==EN_SEND);
+}
 static void queue(void) {
     BSP_CAN_RxTaskInit();now=123;
     rx_count[0]=40;rx_count[1]=10;rx_count[2]=5;
@@ -187,15 +225,62 @@ static void queue(void) {
     malformed=1;rx_count[0]=1;HAL_FDCAN_RxFifo0Callback(&hfdcan1,2);
     BSP_CAN_ProcessRx();assert(decoded[0]==31 && can_health[0].rx_invalid==1);
 }
+/* Drive actual retries through all 50 attempts; no private state injection. */
+static void retry_boundary(unsigned joint, int success, int tx_failure) {
+    assert(joint<7);
+    boot();
+    joint_L_motor[joint].status=0;now+=4;step();
+    assert(arm_output_diag.state[joint]==EN_FAIL);
+    if (tx_failure) fail_enable_id=(uint8_t)(joint+1);
+    Arm_Output_RequestRetry();now+=4;step();
+    uint8_t pending=tx_failure?EN_WAIT_BOOT:EN_SEND;
+    assert(arm_output_diag.state[joint]==pending);
+    Arm_Control_Snapshot c={0};
+    for(unsigned j=0;j<7;j++) { c.kp[j]=10; c.kd[j]=1; c.torque[j]=2; }
+    unsigned cycles=0;
+    while(arm_output_diag.attempts[joint]<50) {
+        assert(++cycles<300);
+        now+=4;
+        for(unsigned j=0;j<7;j++) if(j!=joint) feedback(j);
+        c.tick_ms=now;Arm_Control_Publish(&c);free_slots=32;Arm_Output_Step(now);
+        assert(arm_output_diag.state[joint]==pending);
+    }
+    uint32_t final_attempt=now;
+    for(unsigned dt=4;dt<=20;dt+=4) {
+        now=final_attempt+dt;
+        for(unsigned j=0;j<7;j++) if(j!=joint || (success && dt==20)) feedback(j);
+        c.tick_ms=now;Arm_Control_Publish(&c);free_slots=32;
+        nonzero_kp_frames=nonzero_output_frames=0;
+        unsigned before=total;
+        Arm_Output_Step(now);
+        assert(arm_output_diag.attempts[joint]==50);
+        if(dt<20) assert(arm_output_diag.state[joint]==pending);
+        else if(success) {
+            assert(arm_output_diag.state[joint]==EN_OK && total-before==7);
+            assert(nonzero_kp_frames==7 && nonzero_output_frames==7);
+        } else {
+            assert(arm_output_diag.state[joint]==EN_FAIL && total-before==6);
+            assert(nonzero_kp_frames==0 && nonzero_output_frames==0);
+        }
+    }
+    if(!success) {
+        now+=4;free_slots=32;nonzero_output_frames=0;Arm_Output_Step(now);
+        assert(nonzero_output_frames==0);
+    }
+}
 int main(int argc,char **argv) {
-    assert(argc==2);
+    assert(argc==2 || argc==3);
     if (!strcmp(argv[1],"encoding")) encoding();
     else if (!strcmp(argv[1],"motion")) motion();
     else if (!strcmp(argv[1],"enable")) enable();
     else if (!strcmp(argv[1],"retry")) retry();
     else if (!strcmp(argv[1],"fifo")) fifo();
     else if (!strcmp(argv[1],"bus")) bus_test();
+    else if (!strcmp(argv[1],"fault_zero")) fault_zero();
     else if (!strcmp(argv[1],"queue")) queue();
+    else if (!strcmp(argv[1],"retry_exhausted")) { assert(argc==3);retry_boundary((unsigned)atoi(argv[2]),0,0); }
+    else if (!strcmp(argv[1],"retry_last_feedback")) { assert(argc==3);retry_boundary((unsigned)atoi(argv[2]),1,0); }
+    else if (!strcmp(argv[1],"retry_tx_failure")) { assert(argc==3);retry_boundary((unsigned)atoi(argv[2]),0,1); }
     else return 1;
-    printf("%s: OK\n",argv[1]);return 0;
+    printf("%s%s%s: OK\n",argv[1],argc==3?" joint=":"",argc==3?argv[2]:"");return 0;
 }

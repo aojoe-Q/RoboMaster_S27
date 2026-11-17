@@ -55,8 +55,8 @@ void BSP_USART_Init(void){
 	
 	#endif
 	
-	//USART3 Init
-	 USART_RxDMA_MultiBuffer_Init(&huart5,(uint32_t *)SBUS_MultiRx_Buf[0],(uint32_t *)SBUS_MultiRx_Buf[1],SBUS_RX_BUF_NUM);
+	// UART5: protocol frame length and actual DMA capacity are distinct.
+	 USART_RxDMA_MultiBuffer_Init(&huart5,(uint32_t *)SBUS_MultiRx_Buf[0],(uint32_t *)SBUS_MultiRx_Buf[1],SBUS_RX_DMA_SIZE);
 
 }
 
@@ -97,7 +97,10 @@ static void USART_RxDMA_MultiBuffer_Init(UART_HandleTypeDef *huart, uint32_t *Ds
   ((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->NDTR = DataLength;
 
   /* Enable double memory buffer */
+  CLEAR_BIT(((DMA_Stream_TypeDef *)huart->hdmarx->Instance)->CR, DMA_SxCR_CT);
   SET_BIT(((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->CR, DMA_SxCR_DBM);
+
+  __HAL_DMA_CLEAR_FLAG(huart->hdmarx, __HAL_DMA_GET_TC_FLAG_INDEX(huart->hdmarx));
 
   /* Enable DMA */
   __HAL_DMA_ENABLE(huart->hdmarx);	
@@ -113,49 +116,26 @@ static void USART_RxDMA_MultiBuffer_Init(UART_HandleTypeDef *huart, uint32_t *Ds
   *               reception buffer until which, data are available)
   * @retval None
   */
-static void USER_USART5_RxHandler(UART_HandleTypeDef *huart,uint16_t Size){
+static void USER_USART5_RxHandler(UART_HandleTypeDef *huart,uint16_t Size)
+{
+    DMA_Stream_TypeDef *stream = (DMA_Stream_TypeDef *)huart->hdmarx->Instance;
+    /* A full DMA block means overflow/no usable IDLE boundary. Never decode
+     * its remaining tail as a fresh frame, even if that tail has 18 bytes. */
+    uint32_t overflow = __HAL_DMA_GET_FLAG(huart->hdmarx,
+                                          __HAL_DMA_GET_TC_FLAG_INDEX(huart->hdmarx));
+    __HAL_DMA_DISABLE(huart->hdmarx);
+    while (stream->CR & DMA_SxCR_EN) {}
 
-    /* Current memory buffer used is Memory 0 */
-  if(((((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->CR) & DMA_SxCR_CT ) == RESET){
-		
-					/* Disable DMA */
-					__HAL_DMA_DISABLE(huart->hdmarx);
-          
-				  /* Switch Memory 0 to Memory 1*/
-					((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->CR |= DMA_SxCR_CT;
-					
-				  /* Reset the receive count */
-					__HAL_DMA_SET_COUNTER(huart->hdmarx,SBUS_RX_BUF_NUM);
+    uint32_t received = SBUS_RX_DMA_SIZE - __HAL_DMA_GET_COUNTER(huart->hdmarx);
+    uint8_t completed = (stream->CR & DMA_SxCR_CT) ? 1U : 0U;
+    stream->CR ^= DMA_SxCR_CT;
+    __HAL_DMA_SET_COUNTER(huart->hdmarx, SBUS_RX_DMA_SIZE);
+    __HAL_DMA_CLEAR_FLAG(huart->hdmarx, __HAL_DMA_GET_TC_FLAG_INDEX(huart->hdmarx));
 
-				  /* Juge whether size is equal to the length of the received data */
-					if(Size == SBUS_RX_BUF_NUM)
-					{
-					
-						/* Memory 0 data update to remote_ctrl*/
-						SBUS_TO_RC(SBUS_MultiRx_Buf[0],&remote_ctrl);
-					
-					}
-					
-			}
-			/* Current memory buffer used is Memory 1 */
-			else{
-					/* Disable DMA */
-					__HAL_DMA_DISABLE(huart->hdmarx);
-				 
-				  /* Switch Memory 1 to Memory 0*/
-					((DMA_Stream_TypeDef  *)huart->hdmarx->Instance)->CR &= ~(DMA_SxCR_CT);
-				
-					/* Reset the receive count */
-					__HAL_DMA_SET_COUNTER(huart->hdmarx,SBUS_RX_BUF_NUM);
-
-					if(Size == SBUS_RX_BUF_NUM)
-					{
-						/* Memory 1 to data update to remote_ctrl*/
-						SBUS_TO_RC(SBUS_MultiRx_Buf[1],&remote_ctrl);
-					}
-					
-			}
-			
+    if (!overflow && Size == SBUS_RX_BUF_NUM && received == SBUS_RX_BUF_NUM) {
+        SBUS_TO_RC(SBUS_MultiRx_Buf[completed], &remote_ctrl);
+    }
+    /* The common RxEvent callback re-enables DMA on the other buffer. */
 }
 
 /**

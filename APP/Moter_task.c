@@ -117,8 +117,11 @@ static void restart(unsigned i, uint32_t now, const joint_motor_measure_t *fb)
 /* 检测 CAN 总线恢复：若 can_recovery_epoch 变化，标记总线抑制 */
 static void Arm_CheckBusRecovery(uint32_t now)
 {
+    (void)now; /* 参数预留，当前未使用 */
     if (seen_epoch != can_recovery_epoch) {
         seen_epoch = can_recovery_epoch;
+        /* An authorization from before this CAN fault cannot rearm its new epoch. */
+        retry_requested = 0U;
         arm_output_diag.bus_inhibit = 1U;
         for (unsigned i = 0; i < 7; ++i) {
             arm_output_diag.state[i] = EN_FAIL;
@@ -184,12 +187,6 @@ static void Arm_SendEnableFrame(unsigned i, const joint_motor_measure_t *fb, uin
     /* 20ms 节流：避免同一关节把 TX FIFO 打满 */
     if (now - last_tx[i] < 20U) return;
 
-    /* 50 次尝试上限 */
-    if (arm_output_diag.attempts[i] >= 50U) {
-        arm_output_diag.state[i] = EN_FAIL;
-        return;
-    }
-
     /* FIFO 空间检查 */
     if (!Arm_CheckFifoSpace()) {
         arm_output_diag.fifo_defer[i]++;
@@ -238,7 +235,7 @@ static void Arm_SendControlFrame(unsigned i, const joint_motor_measure_t *fb,
 }
 // * 参数 now：当前毫秒时间（xTaskGetTickCount() * portTICK_PERIOD_MS）。
 // * 流程：总线健康 -> 拷贝反馈 -> 启动/总线恢复判定 -> retry/抑制判定 ->
-// *       逐关节（反馈超时、使能握手、控制帧发送）。
+// *       全轴状态判定 -> 故障统一清零 -> 逐关节发送。
 // * 注意：本函数是唯一向 FDCAN1 发关节帧的地方，不可重入；
 // *       所有发送前都检查 TX FIFO 至少剩 2 个槽位。 */
 void Arm_Output_Step(uint32_t now)
@@ -290,22 +287,46 @@ void Arm_Output_Step(uint32_t now)
             if (arm_output_diag.state[i] != EN_OK) arm_output_diag.state[i] = EN_FAIL;
         }
     }
-    /* 轮转遍历 7 个关节：起点每圈 +1，FIFO 紧张时不会总是前几个关节抢到发送机会。 */
-    for (unsigned n=0; n<7; ++n) {
-        unsigned i = (rotating_first + n) % 7U; // 本圈第 n 个处理的关节
+    /* 第一步：发送前完成所有状态转换，覆盖本拍新增的全部故障。 */
+    uint8_t has_failed_joint = 0;
+    for (unsigned i = 0; i < 7; ++i) {
         /* 反馈超时检查 */
         Arm_CheckFeedbackTimeout(i, &fb[i], now);
-        uint8_t state = arm_output_diag.state[i];
-        // EN_FAIL 的关节本圈直接跳过：不自恢复，必须由上层重新授权
-        if (state == EN_FAIL) { arm_output_diag.offline_skip[i]++; continue; }
-        /* 使能握手检查 */
+        /* 先确认握手，允许最后一次使能尝试收到的有效反馈生效。 */
         if (Arm_CheckEnableHandshake(i, &fb[i], now)) {
             arm_output_diag.state[i] = EN_OK;
-            state = EN_OK;
             if (!arm_output_diag.first_feedback_ms[i]) {
                 arm_output_diag.first_feedback_ms[i] = now;
             }
         }
+        /* 保留最后一次尝试后的 20 ms 等待窗口；发送失败而停在
+         * EN_WAIT_BOOT 的轴也必须受同一尝试上限约束。 */
+        if ((arm_output_diag.state[i] == EN_WAIT_BOOT ||
+             arm_output_diag.state[i] == EN_SEND) &&
+            arm_output_diag.attempts[i] >= 50U && now - last_tx[i] >= 20U) {
+            arm_output_diag.state[i] = EN_FAIL;
+        }
+        if (arm_output_diag.state[i] == EN_FAIL) {
+            has_failed_joint = 1;
+        }
+    }
+
+    /* 第二步：如果检测到故障，立即清零所有轴的输出 */
+    if (has_failed_joint) {
+        for (unsigned i = 0; i < 7; ++i) {
+            cmd.kp[i] = cmd.kd[i] = cmd.torque[i] = 0.0f;
+        }
+    }
+
+    /* 第三步：轮转发送，避免 FIFO 紧张时总是前几个轴优先。
+     * 此阶段不再产生 EN_FAIL，故障清零不会遗漏已经发出的控制帧。 */
+    for (unsigned n=0; n<7; ++n) {
+        unsigned i = (rotating_first + n) % 7U; // 本圈第 n 个处理的关节
+        uint8_t state = arm_output_diag.state[i];
+
+        /* EN_FAIL 的关节本圈直接跳过：不自恢复，必须由上层重新授权 */
+        if (state == EN_FAIL) { arm_output_diag.offline_skip[i]++; continue; }
+
         /* 未就绪关节处理 */
         if (state != EN_OK) {
             Arm_SendEnableFrame(i, &fb[i], now);

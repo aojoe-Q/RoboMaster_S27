@@ -29,6 +29,8 @@
  * @brief Length of SBUS received data
  */
 #define SBUS_RX_BUF_NUM		18u
+/* DMA capacity exceeds one frame so IDLE fires before hardware swaps buffers. */
+#define SBUS_RX_DMA_SIZE       (2U * SBUS_RX_BUF_NUM)
 /**
  * @brief offset of remote control channel data
  */
@@ -168,7 +170,7 @@ extern Remote_Info_Typedef remote_ctrl;
 /**
  * @brief remote control usart RxDMA MultiBuffer
  */
-extern uint8_t SBUS_MultiRx_Buf[2][SBUS_RX_BUF_NUM];
+extern uint8_t SBUS_MultiRx_Buf[2][SBUS_RX_DMA_SIZE];
 
 /* Mouse Exported defines -----------------------------------------------------*/
 #define MOUSE_X_MOVE_SPEED    (remote_ctrl.mouse.x )

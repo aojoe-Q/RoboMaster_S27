@@ -22,6 +22,9 @@ subprocess.run([cc, "-std=c99", "-O2", "-Wall", "-Wextra", "-Werror",
                 "-I", str(BUILD), "-I", str(HERE), str(BUILD / "DM_motor.c"),
                 str(BUILD / "Moter_task.c"), str(BUILD / "bsp_can.c"),
                 str(HERE / "control_selftest.c"), "-lm", "-o", str(exe)], check=True)
-for scenario in ("encoding", "motion", "enable", "retry", "fifo", "bus", "queue"):
+for scenario in ("encoding", "motion", "enable", "retry", "fifo", "bus", "queue", "fault_zero"):
     subprocess.run([str(exe), scenario], check=True)
+for scenario in ("retry_exhausted", "retry_last_feedback", "retry_tx_failure"):
+    for joint in range(7):
+        subprocess.run([str(exe), scenario, str(joint)], check=True)
 print("CONTROL SELFTEST OK")

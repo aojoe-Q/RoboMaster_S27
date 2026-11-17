@@ -144,7 +144,17 @@ static void APP_DecodeJoint(uint8_t joint, const uint8_t *data, uint32_t tick_ms
     sample = joint_L_motor[joint];
     taskEXIT_CRITICAL();
     motor->status = status;
+	
+//	memset(g_Can1g_Can2g_Can2RxData, 0, sizeof(g_Can1g_Can2g_Can2RxData));
+//   HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_FIFO0, &RxHeader1, g_Can1g_Can2g_Can2RxData);
 
+//	joint_L_motor[0].motorid = (g_Can1g_Can2g_Can2RxData[0])&0x0F;		
+//	joint_L_motor[0].p_int= (g_Can1g_Can2g_Can2RxData[1]<<8)|g_Can1g_Can2g_Can2RxData[2];
+//	joint_L_motor[0].v_int= (g_Can1g_Can2g_Can2RxData[3]<<4)|(g_Can1g_Can2g_Can2RxData[4]>>4);
+//	joint_L_motor[0].t_int= ((g_Can1g_Can2g_Can2RxData[4]&0xF)<<8)|g_Can1g_Can2g_Can2RxData[5];
+//	joint_L_motor[0].position = uint_to_float( joint_L_motor[0].p_int, P_MIN, P_MAX, 16);
+//	joint_L_motor[0].velocity = uint_to_float(joint_L_motor[0].v_int, V_MIN, V_MAX, 12);
+//	joint_L_motor[0].torque = uint_to_float(joint_L_motor[0].t_int, T_MIN, T_MAX, 12);
     motor->motorid  = (uint32_t)(data[0] & 0x0FU);
     motor->p_int    = (int)((uint16_t)data[1] << 8 | data[2]); // 位置：D1 高字节、D2 低字节
     motor->v_int    = (int)((uint16_t)data[3] << 4 | (data[4] >> 4)); // 速度：D3 + D4 高 4 位

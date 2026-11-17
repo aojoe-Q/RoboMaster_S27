@@ -25,7 +25,7 @@ extern ArmOutputDiagnostics arm_output_diag; // 全局诊断实例：BSP/输出�
 void Arm_Control_Publish(const Arm_Control_Snapshot *cmd); // 控制层 -> 输出层：覆盖式发布一帧控制快照
 Arm_Control_Snapshot Arm_Control_GetSnapshot(void); // 输出层 -> 控制层：取最近一次快照（回读/调试用）
 void Arm_Output_Start(void); // 请求启动使能流程（上电或整机复位后调用）
-void Arm_Output_RequestRetry(void); /* explicit POWERLESS transition only */
+void Arm_Output_RequestRetry(void); /* explicit DOWN/DOWN edge, after zero-output publication */
 uint8_t Arm_Output_AllEnabled(void); // 7 路是否全部进入 EN_OK
 void Arm_Output_Step(uint32_t now_ms); // 周期步进：推进使能状态机，按周期发送 MIT 帧
 #endif // ARM_OUTPUT_H
