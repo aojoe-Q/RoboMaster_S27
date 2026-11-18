@@ -34,6 +34,11 @@ static const char *scenario;
 static jmp_buf exit_loop;
 ramp_function_source_t J1_L_position_set, J2_L_position_set, J3_L_position_set,
     J4_L_position_set, J5_L_position_set, J6_L_position_set, grip_L_position_set;
+static ramp_function_source_t *const arm_joint_ramp[7] = {
+    &J1_L_position_set, &J2_L_position_set, &J3_L_position_set,
+    &J4_L_position_set, &J5_L_position_set, &J6_L_position_set,
+    &grip_L_position_set
+};
 fp32 J1_send_set,J2_send_set,J3_send_set,J4_send_set,J5_send_set,J6_send_set,Grip_send_set;
 fp32 J1_set_initial_data,J2_set_initial_data,J3_set_initial_data,J4_set_initial_data,
     J5_set_initial_data,J6_set_initial_data,Grip_set_initial_data;

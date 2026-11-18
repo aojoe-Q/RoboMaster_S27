@@ -19,7 +19,7 @@
 
 #define M_PI 3.14159265358979323846f // 圆周率（单精度版）：本工程用弧度计算，避免混用 double 常量
 #define LEFT 0 // 左臂标志（部分机构按左右对称处理）
-#define RIGHT 1 // 右臂标志李沛哲是我杨奥琪的爹
+#define RIGHT 1 // 右臂标志
 #define STOP 0 // 任务停止/启动标志的 0/1 取值
 #define START 1 // 启动
 
@@ -48,9 +48,9 @@
  */
 #define J1_PID_KP 68.0f		//J1 KP
 #define J1_PID_KD 4.0f		//J1 KD
-#define J2_PID_KP 400.0f	//J2 KP
-#define J2_PID_KD 5.2f		//J2 KD
-#define J3_PID_KP 100.0f	//J3 KP 200
+#define J2_PID_KP 550.0f	//J2 KP
+#define J2_PID_KD 6.5f		//J2 KD
+#define J3_PID_KP 165.0f	//J3 KP 200
 #define J3_PID_KD 3.0f		//J3 KD
 #define J4_PID_KP 32.0f		//J4 KP
 #define J4_PID_KD 0.5f		//J4 KD
@@ -65,14 +65,13 @@
 #define Joint_Atony_KP_KD 0.0f		
 /* 各关节零点偏置（rad）：关节角 = 电机读数 - 该值。J3 的 0.1f 为标定后保留的固定偏置。 */
 #define J1_zero_position 0.0f
-#define J2_zero_position 0.0f
-#define J3_zero_position 0.0f//判断电机正反后修改偏重
+#define J2_zero_position -0.1f
+#define J3_zero_position -0.05f//判断电机正反后修改偏重
 #define J4_zero_position 0.0f
 #define J5_zero_position 0.0f
 #define J6_zero_position 0.0f
 #define grip_zero_position 0.0f
 
-#define Grip_clamp_position 0.1f // 夹紧位置
 
 
 
@@ -80,37 +79,6 @@
  * save_position 为“放置/存放”位姿，get_position 为“取物”位姿；
  * 每行的 Grip 字段是该位姿下夹爪的目标开度：0.67 约为夹紧，0.01/0 约为张开。
  */
-#define L_J1_save_position_1 -2.87270164f
-#define L_J2_save_position_1 0.82826561f
-#define L_J3_save_position_1 0.648248634f
-#define L_J4_save_position_1 -0.157740593f
-#define L_J5_save_position_1 -1.09578896f
-#define L_J6_save_position_1 0.803196907f7
-#define L_Grip_save_position_1 0.67f // 0.67：夹紧（咬住水杯）
-
-#define L_J1_save_position_2 -2.91139366f
-#define L_J2_save_position_2 0.94166754f
-#define L_J3_save_position_2 0.516672264f
-#define L_J4_save_position_2 -0.0753412247f
-#define L_J5_save_position_2 -0.892843246f
-#define L_J6_save_position_2 0.804341316f
-#define L_Grip_save_position_2 0.01f // 0.01：接近全开
-
-#define L_J1_get_position_1 -2.87270164f
-#define L_J2_get_position_1 0.82826561f
-#define L_J3_get_position_1 0.648248634f
-#define L_J4_get_position_1 -0.157740593f
-#define L_J5_get_position_1 -1.09578896f
-#define L_J6_get_position_1 0.803196907f
-#define L_Grip_get_position_1 0.0f
-
-#define L_J1_get_position_2 -2.91139366f
-#define L_J2_get_position_2 0.94666754f
-#define L_J3_get_position_2 0.510672264f
-#define L_J4_get_position_2 -0.0753412247f
-#define L_J5_get_position_2 -0.892843246f
-#define L_J6_get_position_2 0.804341316f
-#define L_Grip_get_position_2 0.67f
 
 //TAKE POSE_1
 #define J1_POSE_position 0.0f
@@ -120,15 +88,23 @@
 #define J5_POSE_position 0.0783929825f
 #define J6_POSE_position  2.22877121f
 #define Grip_POSE_position_1 -1.0f
+//TAKE POSE_2
+#define J1_POSE_position_2 0.0f
+#define J2_POSE_position_2 -1.42957973f
+#define J3_POSE_position_2 -1.15300941f
+#define J4_POSE_position_2 -0.0f
+#define J5_POSE_position_2 0.104715347f
+#define J6_POSE_position_2  2.22877121f
+#define Grip_POSE_position_2 -6.0f
 //RESET ARM
 /* 复位（ARM_RESET）模式的目标位姿：把机械臂收到收纳姿态，夹爪保持约夹紧位。 */
 #define J1_reset_position 0.0f
-#define J2_reset_position 0.0852594376f
-#define J3_reset_position 0.151254654f	
-#define J4_reset_position -0.119974136f
-#define J5_reset_position -0.0f
+#define J2_reset_position -0.1f
+#define J3_reset_position -0.08f	
+#define J4_reset_position 0.0f
+#define J5_reset_position 0.0f
 #define J6_reset_position 0.0f
-#define Grip_reset_position 0.714694023f
+#define Grip_reset_position -0.1f
 //TAKE Grip
 
 /* 遥控输入缓存：RC 指向 VT13 遥控数据帧，RC_mode 缓存本拍解析出的拨杆组合。 */
@@ -143,16 +119,15 @@ typedef  struct
  * 避免改变已有模式的数值（PC 端按数值下发模式）。 */
 typedef enum 
 {
-	ARM_L_MOVEMENT_J1_J4,        
+	ARM_RC,        
 	ARM_L_MOVEMENT_J5_GRIP,      
 	ARM_KEY_CONTROL,             
 	ARM_RETURN_INITIAL_POSTURE,  
 	CHASSIS_MOVEMENT_ARM_KEEP,   
 	ARM_POWERLESS, // 无力：Kp/Kd=0，不下发力矩，只保持通信
-	TAKE_POSE,// 取水流程（TAKE_WATER_1）
-	PASS_WATER, // 递水流程（PASS_WATER_1）
+	TAKE_POSE_1,
+	TAKE_POSE_2,
 	ARM_RESET, // 复位流程（ARM_RESET_1）
-	TAKE_Grip, // 夹爪取物流程（TAKE_Grip_1）
 	ARM_MODE_PC_CONTROL,         /* PC (ROS 2 / MoveIt) control, appended: keeps existing values */
 
 }Arm_mode_t;
@@ -257,24 +232,22 @@ extern volatile ArmHomeDiagnostics arm_home_diag;
 void Arm_L_Task();
 void Arm_L_Init(void); // 一次性初始化：等电机上电、逐个使能、同步目标、写入 PD 增益
 void data_updata(void); // 每拍把电机反馈与解算结果写回 ArmData
-uint8_t GetArmMode(void); // 解析遥控拨杆/按键，返回目标模式
+uint8_t GetArmMode(void); // 解析、消抖并切换模式，返回最终安全模式
 
 /* 各模式处理函数（按 Arm_mode_t 分派） */
 /*ģʽ*/
-void Arm_Key_Control_mode(void);  // ����ģʽ
+void Arm_Key_Control_mode(void);  
 
-void Arm_L_Movement_J1_J4(void); // 遥控：J1-J4 跟随遥控拨杆运动
+void ARM_rc(void);
 void Arm_return_initial_position(void); // 回到初始姿态（当前无调用者）
 void Chassis_Movement(void); // 底盘运动时保持机械臂姿态（空实现，占位）
 void Arm_Powerless(void); // 无力模式：Kp/Kd=0，输出零力矩
 void Arm_PC_Control(void);        // PC control mode (ROS 2 / MoveIt) // PC（ROS 2 / MoveIt）控制：目标直接赋 send_set，不做斜坡
 void Arm_PC_Control_Enter(void);  // call once when entering PC mode // 进入 PC 模式时调用一次：初始化 PC 侧的运动插补状态
-void TAKE_POSE_1(void); // 取水动作
-void PASS_WATER_1(void); // 递水动作
-//void TAKE_GRIP(void);
-void ARM_RESET_1(void); // 复位动作
-void TAKE_Grip_1(void); // 夹爪取物动作
-void limitPosition(fp32* position, fp32 max_position, fp32 min_position);  // ��λ���� // 把 *position 钳位到 [min_position, max_position]
+void TAKE_pose_1(void); //预设位姿
+void TAKE_pose_2(void);
+void ARM_reset(void); // 复位动作
+void limitPosition(fp32* position, fp32 max_position, fp32 min_position);  // 把 *position 钳位到 [min_position, max_position]
 
 
 

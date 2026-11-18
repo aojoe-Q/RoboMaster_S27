@@ -53,9 +53,9 @@ types = ["#include <stdint.h>\ntypedef float fp32;"]
 types += re.findall(r"^#define[ \t]+\w+[ \t]+[^\n]+", header, re.M)
 types += [typedef(header, name) for name in ("Arm_mode_t", "DM_contorl_t", "ArmData_t", "Custom_controller_t")]
 types += [typedef(lib_header, "ramp_function_source_t")]
-parts = types + [pre, function(lib, "arm_ramp_calc")]
+parts = types + [pre, function(lib, "arm_data_ramp_init"), function(lib, "arm_ramp_calc")]
 parts += [function(arm, name) for name in ("limitPosition", "Arm_Powerless", "Arm_PrepareAndPublish",
-          "GetArmMode", "Arm_L_Movement_J1_J4", "Arm_L_Task")]
+          "TAKE_POSE_1", "GetArmMode", "Arm_L_Movement_J1_J4", "Arm_L_Task")]
 run("arm_mode", parts + [post], ("bus_hold", "explicit", "loss", "reconnect", "grip_retry",
                                 "invalid", "debounce", "unready", "grip_limits"))
 

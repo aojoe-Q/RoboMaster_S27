@@ -100,11 +100,13 @@ static uint8_t grip_torque_mode;
 static uint8_t retry_powerless_selected;
 
 /* 把 7 个关节放进数组，后面的公共处理就不必重复写 J1、J2……Grip。 */
-static DM_contorl_t *const arm_joint_control[7] = {
+static DM_contorl_t *const arm_joint_control[7] = 
+{
     &ArmData.J1, &ArmData.J2, &ArmData.J3, &ArmData.J4,
     &ArmData.J5, &ArmData.J6, &ArmData.Grip
 };
-static ramp_function_source_t *const arm_joint_ramp[7] = {
+static ramp_function_source_t *const arm_joint_ramp[7] = 
+{
     &J1_L_position_set, &J2_L_position_set, &J3_L_position_set,
     &J4_L_position_set, &J5_L_position_set, &J6_L_position_set,
     &grip_L_position_set
@@ -129,7 +131,8 @@ static joint_motor_measure_t Arm_ReadGripFeedback(void)
 /* 保存电机零点 */
 static void Arm_SaveMotorZero(void)
 {
-    for (uint8_t id = 1U; id <= 6U; ++id) {
+    for (uint8_t id = 1U; id <= 6U; ++id) 
+    {
         save_motor_zero(&hfdcan1, id, 0U);
         osDelay(5);
     }
@@ -139,7 +142,8 @@ static void Arm_SaveMotorZero(void)
 static void Arm_SyncInitialPosition(void)
 {
     taskENTER_CRITICAL();
-    for (uint8_t i = 0U; i < 7U; ++i) {
+    for (uint8_t i = 0U; i < 7U; ++i) 
+    {
         arm_joint_control[i]->position = joint_L_motor[i].position;
         arm_joint_control[i]->send_set = arm_joint_control[i]->position;
         arm_joint_control[i]->Initial_Total_position = arm_joint_control[i]->position;
@@ -151,7 +155,8 @@ static void Arm_SyncInitialPosition(void)
 static void Arm_UpdateMeasuredPositions(void)
 {
     taskENTER_CRITICAL();
-    for (uint8_t i = 0U; i < 7U; ++i) {
+    for (uint8_t i = 0U; i < 7U; ++i) 
+    {
         arm_joint_control[i]->position = joint_L_motor[i].position;
     }
     taskEXIT_CRITICAL();
@@ -167,14 +172,17 @@ static uint8_t Arm_WaitMotorFeedback(uint32_t timeout_ms)
     uint32_t start_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
     uint8_t feedback_ready[7] = {0};  // 标记各电机反馈是否已到达
 
-    while (xTaskGetTickCount() * portTICK_PERIOD_MS - start_ms < timeout_ms) {
+    while (xTaskGetTickCount() * portTICK_PERIOD_MS - start_ms < timeout_ms)
+     {
         uint8_t all_ready = 1U;
         for (uint8_t i = 0U; i < 7U; ++i) {
             uint32_t update_delay = xTaskGetTickCount() * portTICK_PERIOD_MS - joint_L_motor[i].update_tick;
             /* 反馈在最近 100 ms 内更新过，则认为有效 */
-            if (update_delay <= 100U) {
+            if (update_delay <= 100U) 
+            {
                 feedback_ready[i] = 1U;
-            } else {
+            } else 
+            {
                 all_ready = 0U;
             }
         }
@@ -190,7 +198,8 @@ static uint8_t Arm_WaitMotorFeedback(uint32_t timeout_ms)
 static void Arm_CollectMotorPositions(void)
 {
     taskENTER_CRITICAL();
-    for (uint8_t i = 0U; i < 7U; ++i) {
+    for (uint8_t i = 0U; i < 7U; ++i) 
+    {
         arm_joint_control[i]->position = joint_L_motor[i].position;
     }
     taskEXIT_CRITICAL();
@@ -202,7 +211,8 @@ static void Arm_CollectMotorPositions(void)
 static void Arm_InitTargetPositions(void)
 {
     taskENTER_CRITICAL();
-    for (uint8_t i = 0U; i < 7U; ++i) {
+    for (uint8_t i = 0U; i < 7U; ++i) 
+    {
         arm_joint_control[i]->send_set = arm_joint_control[i]->position;
         arm_joint_control[i]->Initial_Total_position = arm_joint_control[i]->position;
     }
@@ -224,13 +234,16 @@ static void Arm_InitPositionRamps(void)
 }
 
 /* 初始化正常控制所需的 PD 增益。 */
+//喵喵
 static void Arm_InitJointGains(void)
 {
-    const fp32 kp[7] = {
+    const fp32 kp[7] = 
+    {
         J1_PID_KP, J2_PID_KP, J3_PID_KP, J4_PID_KP,
         J5_PID_KP, J6_PID_KP, Grip_PID_KP
     };
-    const fp32 kd[7] = {
+    const fp32 kd[7] = 
+    {
         J1_PID_KD, J2_PID_KD, J3_PID_KD, J4_PID_KD,
         J5_PID_KD, J6_PID_KD, Grip_PID_KD
     };
@@ -281,7 +294,8 @@ static void Arm_PrepareAndPublish(void)
 
     /* 收集快照 */
     Arm_Control_Snapshot cmd = {0};
-    for (uint8_t i = 0U; i < 7U; ++i) {
+    for (uint8_t i = 0U; i < 7U; ++i)
+ {
         cmd.pos[i] = arm_joint_control[i]->send_set;
         cmd.kp[i] = arm_joint_control[i]->Kp;
         cmd.kd[i] = arm_joint_control[i]->Kd;
@@ -290,7 +304,8 @@ static void Arm_PrepareAndPublish(void)
     cmd.tick_ms = now;
 
     /* 叠加夹爪混合：当开关开启时，根据 blend 系数混合 Kp/Kd 和力矩 */
-    if (Arm_L_Ready && grip_torque_mode && !arm_output_diag.startup_failed) {
+    if (Arm_L_Ready && grip_torque_mode && !arm_output_diag.startup_failed) 
+    {
         float blend = s_grip_blend;
         cmd.kp[6] *= 1.0f - blend;
         cmd.kd[6] *= 1.0f - blend;
@@ -309,9 +324,9 @@ static void Arm_PublishCurrent(void)
 }
 
 /* Arm_L_Task() —— 机械臂控制任务主循环（osPriorityHigh，8 ms 周期 ≈ 125 Hz）
- * Arm_L_Init() 只在开始时执行一次，之后循环执行“读取 -> 模式 -> 发布”。
- *       data_updata() 取模式与实测 -> 未就绪/总线异常时强制 ARM_POWERLESS ->
- *       模式切换沿做一次状态同步 -> switch 分派各模式函数 -> 准备快照 -> 发布 ->
+ * Arm_L_Init() 只在开始时执行一次，之后循环执行“更新输入 -> 模式 -> 发布”。
+ *       data_updata() 更新实测并调用 GetArmMode()；GetArmMode() 内部完成拨杆消抖、
+ *       安全覆盖和模式进入动作 -> switch 分派各模式函数 -> 准备快照 -> 发布 ->
  *       有效拨杆切到双下时，在零输出发布后请求重试 -> vTaskDelayUntil 保持周期
  * 注意：本函数里的每个延时都会推迟整条控制链路，阻塞式流程（如
  *       Arm_return_initial_position）不能直接在主循环里调用。
@@ -320,70 +335,42 @@ void Arm_L_Task()
 {
     Arm_L_Init();  // 初始化完成后，Arm_L_Ready = 1
 
-    static uint8_t prev_ArmMode = ARM_POWERLESS;  // 初始为无力模式
     uint8_t prev_retry_selection = retry_powerless_selected;
     TickType_t next = xTaskGetTickCount();
 
     while (1) {
         data_updata();
 
-        /* Track the operator selection before fault handling changes ArmMode.
-         * Loss of RC and forced POWERLESS must never create a retry edge. */
         uint8_t request_retry = Arm_L_Ready && retry_powerless_selected &&
                                 !prev_retry_selection;
         prev_retry_selection = retry_powerless_selected;
 
-        if (!Arm_L_Ready || arm_output_diag.bus_inhibit) {
+        if (!Arm_L_Ready || arm_output_diag.bus_inhibit) 
+        {
             ArmData.ArmMode = ARM_POWERLESS;
             grip_torque_mode = 0U;
         }
 
-        /* 模式切换处理 */
-        if (ArmData.ArmMode != prev_ArmMode) {
-            if (ArmData.ArmMode == ARM_L_MOVEMENT_J1_J4) {
-                /* 统一使用 Initial_Total_position 作基准，与限位逻辑对齐 */
-                ArmData.J1.RC_Sum_Value = ArmData.J1.position - ArmData.J1.Initial_Total_position;
-                ArmData.J2.RC_Sum_Value = ArmData.J2.position - ArmData.J2.Initial_Total_position;
-                ArmData.J3.RC_Sum_Value = ArmData.J3.position - ArmData.J3.Initial_Total_position;
-                ArmData.J4.RC_Sum_Value = ArmData.J4.position - ArmData.J4.Initial_Total_position;
-                ArmData.J5.RC_Sum_Value = ArmData.J5.position - ArmData.J5.Initial_Total_position - Custom_RC[4].DM_CC_receive - ArmData.J5.Key_Control_Value;
-                ArmData.J6.RC_Sum_Value = ArmData.J6.position - ArmData.J6.Initial_Total_position - Custom_RC[5].DM_CC_receive - ArmData.J6.Key_Control_Value;
-                ArmData.Grip.RC_Sum_Value = ArmData.Grip.position - ArmData.Grip.Initial_Total_position;
-            }
-            if (ArmData.ArmMode == TAKE_POSE) {
-                /* 切换到预设位姿模式时，将斜坡状态量初始化为当前实际位置 */
-                for (uint8_t i = 0U; i < 7U; ++i) {
-                    arm_data_ramp_init(arm_joint_ramp[i], 1.0f, arm_joint_control[i]->position);
-                }
-            }
-            if (ArmData.ArmMode == ARM_MODE_PC_CONTROL) {
-                Arm_PC_Control_Enter();
-            }
-            if (ArmData.ArmMode != ARM_MODE_PC_CONTROL) {
-                Arm_USB_PC_Disarm();
-            }
-            prev_ArmMode = ArmData.ArmMode;
-        }
-
         /* 模式分派 */
-        switch (ArmData.ArmMode) {
-//            case PASS_WATER:
-//            case ARM_RESET:
-//            case TAKE_Grip:
-//                /* 预设动作已禁用，直接进入无力模式 */
-//                Arm_Powerless();
-//                break;
-			case TAKE_POSE:
-                TAKE_POSE_1();
+        switch (ArmData.ArmMode) 
+        {
+			case TAKE_POSE_1:
+                TAKE_pose_1();
 			break;
-            case ARM_L_MOVEMENT_J1_J4:
-                Arm_L_Movement_J1_J4();
+			case TAKE_POSE_2:
+                TAKE_pose_2();
+			break;
+            case ARM_RC:
+                ARM_rc();
                 break;
             case ARM_MODE_PC_CONTROL:
                 Arm_PC_Control();
                 break;
             case ARM_POWERLESS:
                 Arm_Powerless();
+                break;
+            case ARM_RESET:
+                ARM_reset();
                 break;
             default:
                 Arm_Powerless();
@@ -394,7 +381,8 @@ void Arm_L_Task()
 
         /* Publish zero gains/torque before the higher-priority output task
          * can consume this explicit operator request. */
-        if (request_retry) {
+        if (request_retry)
+     {
             Arm_Output_RequestRetry();
         }
 
@@ -440,18 +428,21 @@ static void Arm_Grip_Stall_Zero(void)
     ArmData.Grip.send_set = reference;
     ArmData.Grip.torque = (float)GRIP_ZERO_DIR * GRIP_ZERO_TORQUE; // 恒定力矩朝死点方向顶，正负由 GRIP_ZERO_DIR 决定
     Arm_PrepareAndPublish(); // 首次发布：将新设置的力矩更新到快照中
-    for (uint32_t n=0; n<GRIP_ZERO_MAX_STEP; ++n) {
+    for (uint32_t n=0; n<GRIP_ZERO_MAX_STEP; ++n)
+    {
         Arm_PrepareAndPublish();  // 每拍重新收集并发布，刷新时间戳防止输出层超时
         osDelay(GRIP_ZERO_STEP_MS); // 20 ms 采样节拍
         joint_motor_measure_t feedback = Arm_ReadGripFeedback();
         diag.last_position = feedback.position;
         diag.feedback_age_ms = xTaskGetTickCount()*portTICK_PERIOD_MS-feedback.update_tick;
         diag.max_travel = fmaxf(diag.max_travel, fabsf(feedback.position-reference));
-        if (!Arm_Output_AllEnabled()) {
+        if (!Arm_Output_AllEnabled()) 
+        {
             diag.result = GRIP_ZERO_ENABLE_LOST;
             break;
         }
-        if (diag.feedback_age_ms > 40U) {
+        if (diag.feedback_age_ms > 40U)
+     {
             diag.result = GRIP_ZERO_FEEDBACK_STALE;
             break;
         }
@@ -468,34 +459,43 @@ static void Arm_Grip_Stall_Zero(void)
     arm_grip_zero_diag = diag;
     Arm_PrepareAndPublish();
     osDelay(8);
-    if (still>=GRIP_ZERO_STILL_CNT && Arm_Output_AllEnabled()) { // 连续停稳且仍使能，即可写零点
+    if (still>=GRIP_ZERO_STILL_CNT && Arm_Output_AllEnabled()) 
+    { // 连续停稳且仍使能，即可写零点
         uint8_t zero_frame[8] = {0xFF, 0xFF, 0xFF, 0xFF,
                                  0xFF, 0xFF, 0xFF, 0xFE}; // 保存当前位置为零点
         uint32_t sent_ms=xTaskGetTickCount()*portTICK_PERIOD_MS;
-        if (canx_send_data(&hfdcan1,7U,zero_frame,8U)==HAL_OK) { // 存零帧只发一次，之后靠读回确认
+        if (canx_send_data(&hfdcan1,7U,zero_frame,8U)==HAL_OK) 
+        { // 存零帧只发一次，之后靠读回确认
             diag.zero_sent = 1U;
             diag.result = GRIP_ZERO_READBACK_TIMEOUT;
             /* EEPROM command is sent once; require a fresh zero-position reply. */
-            for (unsigned n=0;n<10;++n) {
+            for (unsigned n=0;n<10;++n)
+         {
                 Arm_PublishCurrent();  // 快速循环（10ms），仅发布
                 osDelay(10);
                 joint_motor_measure_t feedback = Arm_ReadGripFeedback();
                 diag.last_position = feedback.position;
                 diag.feedback_age_ms = xTaskGetTickCount()*portTICK_PERIOD_MS-feedback.update_tick;
-                if (!Arm_Output_AllEnabled()) {
+                if (!Arm_Output_AllEnabled()) 
+                {
                     diag.result = GRIP_ZERO_VERIFY_ENABLE_LOST;
                     break;
                 }
                 if (feedback.update_count!=last_count &&
-                    (int32_t)(feedback.update_tick-sent_ms)>0 && fabsf(feedback.position)<0.05f) { // 必须是存零之后的新帧且读数接近 0 才认可
+                    (int32_t)(feedback.update_tick-sent_ms)>0 && fabsf(feedback.position)<0.05f) 
+                { // 必须是存零之后的新帧且读数接近 0 才认可
                     diag.result = GRIP_ZERO_OK;
                     zero_confirmed=1U;break;
                 }
             }
-        } else {
+        } 
+        else 
+        {
             diag.result = GRIP_ZERO_SEND_FAILED;
         }
-    } else if (diag.result == GRIP_ZERO_RUNNING) {
+    } 
+    else if (diag.result == GRIP_ZERO_RUNNING)
+    {
         diag.result = (still>=GRIP_ZERO_STILL_CNT) ?
             GRIP_ZERO_VERIFY_ENABLE_LOST : GRIP_ZERO_STALL_TIMEOUT;
     }
@@ -513,7 +513,8 @@ static void Arm_HomeRecord(const joint_motor_measure_t fb[7], uint32_t now, uint
                              J4_zero_position, J5_zero_position, J6_zero_position,
                              grip_zero_position};
     arm_home_diag.elapsed_ms = now - start;
-    for (uint8_t i = 0U; i < 7U; ++i) {
+    for (uint8_t i = 0U; i < 7U; ++i) 
+    {
         arm_home_diag.error[i] = fb[i].position - targets[i];
         arm_home_diag.velocity[i] = fb[i].velocity;
         arm_home_diag.feedback_age_ms[i] = now - fb[i].update_tick;
@@ -786,30 +787,22 @@ void Arm_L_Init(void)
     Arm_L_Ready = 1;  /* 就绪标志 */
 }
 
-/* data_updata() —— 每拍刷新“模式 + 实测位置”
+/* data_updata() —— 每拍刷新输入状态
  * 参数/返回：无
  * 调用：Arm_L_Task() 主循环每拍的第一件事。
- * 说明：模式由 GetArmMode() 从遥控器拨杆解析；实测位置在临界区内从
- *       joint_L_motor[] 整体拷贝到 ArmData，避免读到 CAN 接收路径写了一半的结构。
+ * 说明：先从 CAN 反馈同步实测位置，再调用 GetArmMode()。GetArmMode() 统一负责
+ *       拨杆解析、消抖、安全覆盖和模式切换动作，避免主循环重复维护 prev_ArmMode。
  */
 void data_updata(void)
 {
-	/* 先读取当前模式，再读取同一时刻的 7 轴反馈。 */
-	ArmData.ArmMode = GetArmMode();
+	/* 先取同一时刻的 7 轴反馈，再由 GetArmMode() 完成模式解析和切换动作。 */
 	Arm_UpdateMeasuredPositions();
+	ArmData.ArmMode = GetArmMode();
 }
 
-/* GetArmMode() —— 由 VT13 遥控器两个拨杆的组合解析工作模式
+/* GetArmMode() —— 由 VT13 遥控器两个拨杆的组合解析并切换工作模式
  * 参数/返回：返回消抖后的稳定模式（见 Arm_mode_t）
- * 调用：data_updata() 每拍调用
- * 组合（右拨杆 + 左拨杆）：
- *   上 + 上 -> ARM_MODE_PC_CONTROL （上位机控制，覆盖原 TAKE_WATER）
- *   中 + 上 -> PASS_WATER
- *   中 + 中 -> ARM_RESET
- *   中 + 下 -> TAKE_POSE（预设位姿）
- *   下 + 上 -> ARM_L_MOVEMENT_J1_J4（遥控手动）
- *   下 + 下 -> ARM_POWERLESS
- *   其他    -> ARM_POWERLESS
+ * 调用：data_updata() 每拍调用；该函数同时执行一次性的模式进入动作
  * 消抖：模式与夹爪力矩开关各自要连续 3 拍一致才生效；遥控失联（任一拨杆数据为 0）
  *       立即生效，不消抖。
  */
@@ -838,24 +831,25 @@ uint8_t GetArmMode(void)
        USB 断开或 CAN 反馈丢失时，Arm_PC_Control() 保持锁存的当前位置。 */
 	if (switch_is_up(right) && switch_is_up(left))
 	{
-			mode = ARM_MODE_PC_CONTROL;
+		// mode = ARM_RC;	
+        mode = ARM_MODE_PC_CONTROL;
 	}
 	else if (switch_is_mid(right)&&switch_is_up(left))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 0
 	{
-			mode = PASS_WATER;
+			mode = TAKE_POSE_2;
 	}
 	else if (switch_is_mid(right)&&switch_is_mid(left))  //RC_contorl.RC->rc.shutter == 1  //switch_is_up(right)&&switch_is_up(left)
 	{
-			mode = ARM_RESET;
+            mode = TAKE_POSE_1;
 	}
 	else if (switch_is_mid(right)&&switch_is_down(left))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
 	{
-			mode = TAKE_POSE;
+            mode = ARM_RESET;
 	}
-		else if (switch_is_down(right)&&switch_is_up(left))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
-	{
-			mode = ARM_L_MOVEMENT_J1_J4;/*�ع��ʼ��̬*/
-	}
+	// 	else if (switch_is_down(right)&&switch_is_up(left))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
+	// {
+	// 		mode = ARM_RC;
+	// }
 
 	
 //	else if (left_button_press_count % 2 == 0&&right_button_press_count % 2 == 0)  //left_button_press_count % 2 == 0&&right_button_press_count % 2 == 0
@@ -877,6 +871,7 @@ uint8_t GetArmMode(void)
 	}
     static uint8_t candidate = ARM_POWERLESS, stable = ARM_POWERLESS, samples; // 3 拍一致消抖：候选模式连续 3 次相同才更新 stable
     static uint8_t grip_candidate, grip_samples;
+    static uint8_t previous_mode = ARM_POWERLESS;
     uint8_t grip = switch_is_up(right) && switch_is_mid(left); // 夹爪力矩模式开关：右上 + 左中 组合
     if (mode != candidate) { candidate = mode; samples = 1U; }
     else if (samples < 3U) samples++;
@@ -890,6 +885,49 @@ uint8_t GetArmMode(void)
         candidate = ARM_POWERLESS; samples = 0U;
         grip_candidate = 0U; grip_samples = 0U;
     }
+
+    /* 安全覆盖必须在模式切换动作之前执行，避免故障时进入受控模式。 */
+    if (!Arm_L_Ready || arm_output_diag.bus_inhibit) {
+        stable = ARM_POWERLESS;
+        grip_torque_mode = 0U;
+    }
+
+    /* 模式解析、消抖、故障覆盖和进入动作集中在此处。 */
+    if (stable != previous_mode) 
+    {
+        if (stable == ARM_RC) 
+        {
+            /* 统一使用 Initial_Total_position 作基准，与限位逻辑对齐。 */
+            ArmData.J1.RC_Sum_Value = ArmData.J1.position - ArmData.J1.Initial_Total_position;
+            ArmData.J2.RC_Sum_Value = ArmData.J2.position - ArmData.J2.Initial_Total_position;
+            ArmData.J3.RC_Sum_Value = ArmData.J3.position - ArmData.J3.Initial_Total_position;
+            ArmData.J4.RC_Sum_Value = ArmData.J4.position - ArmData.J4.Initial_Total_position;
+            ArmData.J5.RC_Sum_Value = ArmData.J5.position - ArmData.J5.Initial_Total_position - Custom_RC[4].DM_CC_receive - ArmData.J5.Key_Control_Value;
+            ArmData.J6.RC_Sum_Value = ArmData.J6.position - ArmData.J6.Initial_Total_position - Custom_RC[5].DM_CC_receive - ArmData.J6.Key_Control_Value;
+            ArmData.Grip.RC_Sum_Value = ArmData.Grip.position - ArmData.Grip.Initial_Total_position;
+        }
+
+        if (stable == TAKE_POSE_1 || stable == TAKE_POSE_2 || stable == ARM_RESET )
+        {
+            /* 进入预设位姿时，从当前实测位置开始斜坡。 */
+            for (uint8_t i = 0U; i < 7U; ++i) {
+                arm_data_ramp_init(arm_joint_ramp[i], 1.0f,
+                                   arm_joint_control[i]->position);
+            }
+        }
+
+        if (stable == ARM_MODE_PC_CONTROL) 
+        {
+            Arm_PC_Control_Enter();
+        } 
+        else 
+        {
+            Arm_USB_PC_Disarm();
+        }
+
+        previous_mode = stable;
+    }
+
     return stable;
 }
 
@@ -901,168 +939,6 @@ uint8_t GetArmMode(void)
  */
 /*************************** 模式 ****************************/
 
-/* TAKE_Grip_1() —— 预设位姿：取夹爪
- * 参数/返回：无
- * 调用：主循环 switch 的 TAKE_Grip 分支，每拍一次
- * 目标：各关节到 J*_reset_position，夹爪 Grip_send_set = 0（全张）
- * 注意：夹爪这里用的是 J6 的 PD 宏。
- */
-//void TAKE_Grip_1(void)
-//{
-//	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
-//	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
-//	ArmData.J3.Kp = J3_PID_KP;ArmData.J3.Kd = J3_PID_KD;
-//	ArmData.J4.Kp = J4_PID_KP;ArmData.J4.Kd = J4_PID_KD;
-//	ArmData.J5.Kp = J5_PID_KP;ArmData.J5.Kd = J5_PID_KD;
-//	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
-//	ArmData.Grip.Kp = J6_PID_KP;ArmData.Grip.Kd = J6_PID_KD;
-
-//	J1_send_set = J1_reset_position;
-//	J2_send_set = J2_reset_position;
-//	J3_send_set = J3_reset_position;
-//	J4_send_set = J4_reset_position;
-//	J5_send_set = J5_reset_position;
-//	J6_send_set = J6_reset_position;
-//	Grip_send_set = 0;
-
-///* 每拍最大转角(rad/拍)：J1 最快，其余按关节惯量给不同步长。 */
-//	J1_ramp= 0.0090,J2_ramp= 0.003,J3_ramp= 0.0045,J4_ramp= 0.0042,J5_ramp= 0.003,J6_ramp= 0.003,Grip_ramp= 0.030;  //锟斤拷锟斤拷锟斤拷
-
-///* 预设位姿也要过限位：防止宏被改后越界。 */
-//	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
-//	limitPosition(&J2_send_set,J2_Max_position,J2_Min_position);
-//	limitPosition(&J3_send_set,J3_Max_position,J3_Min_position);
-//	limitPosition(&J4_send_set,J4_Max_position,J4_Min_position);
-//	limitPosition(&J5_send_set,J5_Max_position,J5_Min_position);
-//	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
-//	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
-
-//	/*斜锟铰猴拷锟斤拷*/
-//	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
-//	arm_ramp_calc(&J2_L_position_set,J2_ramp,J2_send_set);
-//	arm_ramp_calc(&J3_L_position_set,J3_ramp,J3_send_set);
-//	arm_ramp_calc(&J4_L_position_set,J4_ramp,J4_send_set);
-//	arm_ramp_calc(&J5_L_position_set,J5_ramp,J5_send_set);
-//	arm_ramp_calc(&J6_L_position_set,J6_ramp,J6_send_set);
-//	arm_ramp_calc(&grip_L_position_set,Grip_ramp,Grip_send_set);
-
-//	
-//	ArmData.J1.send_set = J1_L_position_set.out;
-//	ArmData.J2.send_set = J2_L_position_set.out;
-//	ArmData.J3.send_set = J3_L_position_set.out;
-//	ArmData.J4.send_set = J4_L_position_set.out;
-//	ArmData.J5.send_set = J5_L_position_set.out;
-//	ArmData.J6.send_set = J6_L_position_set.out;
-//	ArmData.Grip.send_set = grip_L_position_set.out;
-
-//}
-
-/* ARM_RESET_1() —— 预设位姿：复位
- * 参数/返回：无
- * 调用：主循环 switch 的 ARM_RESET 分支，每拍一次
- * 目标：各关节到 J*_reset_position，夹爪到 Grip_TAKE_position_1
- *       （与 TAKE_Grip_1 的唯一区别就是夹爪目标，这里夹在取物位）。
- */
-//void ARM_RESET_1(void)
-//{
-//	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
-//	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
-//	ArmData.J3.Kp = J3_PID_KP;ArmData.J3.Kd = J3_PID_KD;
-//	ArmData.J4.Kp = J4_PID_KP;ArmData.J4.Kd = J4_PID_KD;
-//	ArmData.J5.Kp = J5_PID_KP;ArmData.J5.Kd = J5_PID_KD;
-//	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
-//	ArmData.Grip.Kp = J6_PID_KP;ArmData.Grip.Kd = J6_PID_KD;
-
-//	J1_send_set = J1_reset_position;
-//	J2_send_set = J2_reset_position;
-//	J3_send_set = J3_reset_position;
-//	J4_send_set = J4_reset_position;
-//	J5_send_set = J5_reset_position;
-//	J6_send_set = J6_reset_position;
-//	Grip_send_set = Grip_TAKE_position_1;
-
-//	J1_ramp= 0.0090,J2_ramp= 0.003,J3_ramp= 0.0045,J4_ramp= 0.0042,J5_ramp= 0.003,J6_ramp= 0.003,Grip_ramp= 0.030;  //锟斤拷锟斤拷锟斤拷
-
-//	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
-//	limitPosition(&J2_send_set,J2_Max_position,J2_Min_position);
-//	limitPosition(&J3_send_set,J3_Max_position,J3_Min_position);
-//	limitPosition(&J4_send_set,J4_Max_position,J4_Min_position);
-//	limitPosition(&J5_send_set,J5_Max_position,J5_Min_position);
-//	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
-//	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
-
-//	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
-//	arm_ramp_calc(&J2_L_position_set,J2_ramp,J2_send_set);
-//	arm_ramp_calc(&J3_L_position_set,J3_ramp,J3_send_set);
-//	arm_ramp_calc(&J4_L_position_set,J4_ramp,J4_send_set);
-//	arm_ramp_calc(&J5_L_position_set,J5_ramp,J5_send_set);
-//	arm_ramp_calc(&J6_L_position_set,J6_ramp,J6_send_set);
-//	arm_ramp_calc(&grip_L_position_set,Grip_ramp,Grip_send_set);
-
-//	ArmData.J1.send_set = J1_L_position_set.out;
-//	ArmData.J2.send_set = J2_L_position_set.out;
-//	ArmData.J3.send_set = J3_L_position_set.out;
-//	ArmData.J4.send_set = J4_L_position_set.out;
-//	ArmData.J5.send_set = J5_L_position_set.out;
-//	ArmData.J6.send_set = J6_L_position_set.out;
-//	ArmData.Grip.send_set = grip_L_position_set.out;
-
-//}
-
-/* PASS_WATER_1() —— 预设位姿：递水
- * 参数/返回：无
- * 调用：主循环 switch 的 PASS_WATER 分支，每拍一次
- * 目标：各关节到 J*_TAKE_position，夹爪到 Grip_TAKE_position_1。
- */
-//void PASS_WATER_1(void)
-//{
-//	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
-//	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
-//	ArmData.J3.Kp = J3_PID_KP;ArmData.J3.Kd = J3_PID_KD;
-//	ArmData.J4.Kp = J4_PID_KP;ArmData.J4.Kd = J4_PID_KD;
-//	ArmData.J5.Kp = J5_PID_KP;ArmData.J5.Kd = J5_PID_KD;
-//	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
-//	ArmData.Grip.Kp = J6_PID_KP;ArmData.Grip.Kd = J6_PID_KD;
-
-//	J1_send_set = J1_TAKE_position;
-//	J2_send_set = J2_TAKE_position;
-//	J3_send_set = J3_TAKE_position;
-//	J4_send_set = J4_TAKE_position;
-//	J5_send_set = J5_TAKE_position;
-//	J6_send_set = J6_TAKE_position;
-//	Grip_send_set = Grip_TAKE_position_1;
-
-//	J1_ramp= 0.0090,J2_ramp= 0.003,J3_ramp= 0.0045,J4_ramp= 0.0042,J5_ramp= 0.003,J6_ramp= 0.003,Grip_ramp= 0.030;  
-
-//	
-//	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
-//	limitPosition(&J2_send_set,J2_Max_position,J2_Min_position);
-//	limitPosition(&J3_send_set,J3_Max_position,J3_Min_position);
-//	limitPosition(&J4_send_set,J4_Max_position,J4_Min_position);
-//	limitPosition(&J5_send_set,J5_Max_position,J5_Min_position);
-//	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
-//	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
-
-//	/*斜锟铰猴拷锟斤拷*/
-//	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
-//	arm_ramp_calc(&J2_L_position_set,J2_ramp,J2_send_set);
-//	arm_ramp_calc(&J3_L_position_set,J3_ramp,J3_send_set);
-//	arm_ramp_calc(&J4_L_position_set,J4_ramp,J4_send_set);
-//	arm_ramp_calc(&J5_L_position_set,J5_ramp,J5_send_set);
-//	arm_ramp_calc(&J6_L_position_set,J6_ramp,J6_send_set);
-//	arm_ramp_calc(&grip_L_position_set,Grip_ramp,Grip_send_set);
-
-//	/*���λ�ø�ֵ*/
-//	ArmData.J1.send_set = J1_L_position_set.out;
-//	ArmData.J2.send_set = J2_L_position_set.out;
-//	ArmData.J3.send_set = J3_L_position_set.out;
-//	ArmData.J4.send_set = J4_L_position_set.out;
-//	ArmData.J5.send_set = J5_L_position_set.out;
-//	ArmData.J6.send_set = J6_L_position_set.out;
-//	ArmData.Grip.send_set = grip_L_position_set.out;
-
-
-//}
 
 /* TAKE_POSE_1() —— 预设位姿
  * 参数/返回：无
@@ -1070,7 +946,7 @@ uint8_t GetArmMode(void)
  * 目标：J*_POSE_position 和 Grip_POSE_position_1，经限位和斜坡后发布。
  * CAN 帧由 Moter_Task 发送；输出层故障时仍会禁止发送或撤掉增益。
  */
-void TAKE_POSE_1(void)
+void TAKE_pose_1(void)
 {
 	//static int take_water = 0;
 	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
@@ -1091,11 +967,9 @@ void TAKE_POSE_1(void)
 
 //	Grip_send_set = grip_zero_position;
 
-	J1_ramp= 0.0090,J2_ramp= 0.002,J3_ramp= 0.0035,J4_ramp= 0.0032,J5_ramp= 0.002,J6_ramp= 0.002,Grip_ramp= 0.030;  //锟斤拷锟斤拷锟斤拷
+	J1_ramp= 0.0090,J2_ramp= 0.002,J3_ramp= 0.0035,J4_ramp= 0.0032,J5_ramp= 0.002,J6_ramp= 0.015,Grip_ramp= 0.030;  //锟斤拷锟斤拷锟斤拷
 
-	/*��׶�һ���������ص�λ���ٱպ���צȡˮ*/
 
-	/*锟斤拷位*/
 	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
 	limitPosition(&J2_send_set,J2_Max_position,J2_Min_position);
 	limitPosition(&J3_send_set,J3_Max_position,J3_Min_position);
@@ -1104,7 +978,6 @@ void TAKE_POSE_1(void)
 	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
 	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
 
-	/*斜锟铰猴拷锟斤拷*/
 	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
 	arm_ramp_calc(&J2_L_position_set,J2_ramp,J2_send_set);
 	arm_ramp_calc(&J3_L_position_set,J3_ramp,J3_send_set);
@@ -1114,6 +987,105 @@ void TAKE_POSE_1(void)
 	arm_ramp_calc(&grip_L_position_set,Grip_ramp,Grip_send_set);
 
 	/*���λ�ø�ֵ*/
+	ArmData.J1.send_set = J1_L_position_set.out;
+	ArmData.J2.send_set = J2_L_position_set.out;
+	ArmData.J3.send_set = J3_L_position_set.out;
+	ArmData.J4.send_set = J4_L_position_set.out;
+	ArmData.J5.send_set = J5_L_position_set.out;
+	ArmData.J6.send_set = J6_L_position_set.out;
+	ArmData.Grip.send_set = grip_L_position_set.out;
+}
+
+void TAKE_pose_2(void)
+{
+	//static int take_water = 0;
+	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
+	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
+	ArmData.J3.Kp = J3_PID_KP;ArmData.J3.Kd = J3_PID_KD;
+	ArmData.J4.Kp = J4_PID_KP;ArmData.J4.Kd = J4_PID_KD;
+	ArmData.J5.Kp = J5_PID_KP;ArmData.J5.Kd = J5_PID_KD;
+	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
+	ArmData.Grip.Kp = Grip_PID_KP;ArmData.Grip.Kd = Grip_PID_KD;
+
+	J1_send_set = J1_POSE_position_2;
+	J2_send_set = J2_POSE_position_2;
+	J3_send_set = J3_POSE_position_2;
+	J4_send_set = J4_POSE_position_2;
+	J5_send_set = J5_POSE_position_2;
+	J6_send_set = J6_POSE_position_2;
+	Grip_send_set = Grip_POSE_position_2;
+
+//	Grip_send_set = grip_zero_position;
+
+	J1_ramp= 0.0090,J2_ramp= 0.002,J3_ramp= 0.0035,J4_ramp= 0.0032,J5_ramp= 0.002,J6_ramp= 0.015,Grip_ramp= 0.030;  //锟斤拷锟斤拷锟斤拷
+
+
+	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
+	limitPosition(&J2_send_set,J2_Max_position,J2_Min_position);
+	limitPosition(&J3_send_set,J3_Max_position,J3_Min_position);
+	limitPosition(&J4_send_set,J4_Max_position,J4_Min_position);
+	limitPosition(&J5_send_set,J5_Max_position,J5_Min_position);
+	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
+	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
+
+	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
+	arm_ramp_calc(&J2_L_position_set,J2_ramp,J2_send_set);
+	arm_ramp_calc(&J3_L_position_set,J3_ramp,J3_send_set);
+	arm_ramp_calc(&J4_L_position_set,J4_ramp,J4_send_set);
+	arm_ramp_calc(&J5_L_position_set,J5_ramp,J5_send_set);
+	arm_ramp_calc(&J6_L_position_set,J6_ramp,J6_send_set);
+	arm_ramp_calc(&grip_L_position_set,Grip_ramp,Grip_send_set);
+
+	/*���λ�ø�ֵ*/
+	ArmData.J1.send_set = J1_L_position_set.out;
+	ArmData.J2.send_set = J2_L_position_set.out;
+	ArmData.J3.send_set = J3_L_position_set.out;
+	ArmData.J4.send_set = J4_L_position_set.out;
+	ArmData.J5.send_set = J5_L_position_set.out;
+	ArmData.J6.send_set = J6_L_position_set.out;
+	ArmData.Grip.send_set = grip_L_position_set.out;
+}
+
+void ARM_reset(void)
+{
+	//static int take_water = 0;
+	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
+	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
+	ArmData.J3.Kp = J3_PID_KP;ArmData.J3.Kd = J3_PID_KD;
+	ArmData.J4.Kp = J4_PID_KP;ArmData.J4.Kd = J4_PID_KD;
+	ArmData.J5.Kp = J5_PID_KP;ArmData.J5.Kd = J5_PID_KD;
+	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
+	ArmData.Grip.Kp = Grip_PID_KP;ArmData.Grip.Kd = Grip_PID_KD;
+
+	J1_send_set = J1_reset_position;
+	J2_send_set = J2_reset_position;
+	J3_send_set = J3_reset_position;
+	J4_send_set = J4_reset_position;
+	J5_send_set = J5_reset_position;
+	J6_send_set = J6_reset_position;
+	Grip_send_set = Grip_reset_position;
+
+//	Grip_send_set = grip_zero_position;
+
+	J1_ramp= 0.0090,J2_ramp= 0.002,J3_ramp= 0.0035,J4_ramp= 0.0032,J5_ramp= 0.002,J6_ramp= 0.015,Grip_ramp= 0.030;  
+
+
+	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
+	limitPosition(&J2_send_set,J2_Max_position,J2_Min_position);
+	limitPosition(&J3_send_set,J3_Max_position,J3_Min_position);
+	limitPosition(&J4_send_set,J4_Max_position,J4_Min_position);
+	limitPosition(&J5_send_set,J5_Max_position,J5_Min_position);
+	limitPosition(&J6_send_set,J6_Max_position,J6_Min_position);
+	limitPosition(&Grip_send_set,Grip_Max_position,Grip_Min_position);
+
+	arm_ramp_calc(&J1_L_position_set,J1_ramp,J1_send_set);
+	arm_ramp_calc(&J2_L_position_set,J2_ramp,J2_send_set);
+	arm_ramp_calc(&J3_L_position_set,J3_ramp,J3_send_set);
+	arm_ramp_calc(&J4_L_position_set,J4_ramp,J4_send_set);
+	arm_ramp_calc(&J5_L_position_set,J5_ramp,J5_send_set);
+	arm_ramp_calc(&J6_L_position_set,J6_ramp,J6_send_set);
+	arm_ramp_calc(&grip_L_position_set,Grip_ramp,Grip_send_set);
+
 	ArmData.J1.send_set = J1_L_position_set.out;
 	ArmData.J2.send_set = J2_L_position_set.out;
 	ArmData.J3.send_set = J3_L_position_set.out;
@@ -1226,11 +1198,16 @@ void Arm_PC_Control(void)
     uint32_t now_ms = xTaskGetTickCount()*portTICK_PERIOD_MS;
     float dt = (float)(now_ms-pc_last_ms)*0.001f; // 与上一拍的时间差（s），用于插补积分
     pc_last_ms = now_ms;
-    if (got_target) { // 只有拿到有效目标才推进插补器
+    if (got_target) 
+    { // 只有拿到有效目标才推进插补器
         const DM_contorl_t *joint[7] = {&ArmData.J1,&ArmData.J2,&ArmData.J3,
             &ArmData.J4,&ArmData.J5,&ArmData.J6,&ArmData.Grip};
-        for (unsigned n=0; n<7; ++n) {
-            if (!pc_motion_valid) { pc_motion[n].position=joint[n]->position; pc_motion[n].velocity=0.0f; } // 刚进 PC 模式或上次无目标：用实测位置重置插补器，速度清零
+        for (unsigned n=0; n<7; ++n) 
+        {
+            if (!pc_motion_valid) 
+            {
+                 pc_motion[n].position=joint[n]->position; pc_motion[n].velocity=0.0f; 
+            } // 刚进 PC 模式或上次无目标：用实测位置重置插补器，速度清零
             pc_target[n] = Arm_Motion_Step(&pc_motion[n], pc_target[n], vmax[n], dt); // 逐关节插补：速度上限 vmax[n]、加速度上限 ARM_PC_AMAX_RAD_S2
         }
         pc_motion_valid=1U;
@@ -1301,7 +1278,7 @@ void Arm_PC_Control(void)
  * 注意：本模式只有夹爪走 arm_ramp 斜坡，其余轴直接跟手；J1 的限位在
  *       J2 低于碰撞阈值时会收紧（见 J1_J2_ZONE_*）。
  */
-void Arm_L_Movement_J1_J4(void)
+void ARM_rc(void)
 {
 	int16_t channel_0,channel_1,channel_2,channel_3;
 	/*锟斤拷取遥锟斤拷锟斤拷通锟斤拷锟斤拷锟诫，应锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷*/
@@ -1318,11 +1295,11 @@ void Arm_L_Movement_J1_J4(void)
 	ArmData.J4.Kp = J4_PID_KP;ArmData.J4.Kd = J4_PID_KD;
 	ArmData.J5.Kp = J5_PID_KP;ArmData.J5.Kd = J5_PID_KD;
 	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
-	ArmData.Grip.Kp = Grip_PID_KP;ArmData.Grip.Kd = Grip_PID_KD;	/* 原来误用 J6 的 PD */
+	ArmData.Grip.Kp = Grip_PID_KP;ArmData.Grip.Kd = Grip_PID_KD;	
 /* 夹爪斜坡步长 0.030 rad/拍：本模式只有夹爪限速，其余轴直接跟手。 */
 	Grip_ramp = 0.030;							/* 本模式原来完全不设夹爪斜坡 */
-	/*遥锟斤拷锟斤拷锟斤拷锟桔硷拷值*/                 
-	ArmData.J1.RC_Sum_Value += channel_0*0.00001; // 每拍角度增量 = 通道值 × 系数；ch0 同时驱动 J1/J3，ch1 同时驱动 J2/J4，ch2 驱动 J5/J6
+
+    ArmData.J1.RC_Sum_Value += channel_0*0.00001; // 每拍角度增量 = 通道值 × 系数；ch0 同时驱动 J1/J3，ch1 同时驱动 J2/J4，ch2 驱动 J5/J6
 	ArmData.J2.RC_Sum_Value += channel_1*0.00001;
 	ArmData.J3.RC_Sum_Value += channel_0*0.00001;
 	ArmData.J4.RC_Sum_Value += channel_1*0.00002; // J4 的累加系数是 J2 的两倍
@@ -1504,7 +1481,8 @@ void Arm_return_initial_position(void)
 				J1_J2_J3_J4_J5_J6_J7_flag = 0;
 		}
 		osDelay(5); // 5 ms 一步，动作总耗时取决于最远轴的距离
-	}while(J1_J2_J3_J4_J5_J6_J7_flag);
+	}
+    while(J1_J2_J3_J4_J5_J6_J7_flag);
 }
 
 /* Chassis_Movement() —— 底盘运动时保持机械臂（当前为空实现，仅占位）。 */
