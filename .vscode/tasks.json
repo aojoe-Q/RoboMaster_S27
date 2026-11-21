@@ -161,6 +161,43 @@
       ],
       "dependsOn": "Keil: Build",
       "problemMatcher": []
+    },
+    {
+      "label": "CMake: Build (Debug)",
+      "detail": "用 arm-none-eabi-gcc + Ninja 编译 CMake 工程，产物 build/Debug/S27_TEST_2.elf|hex|bin（脚本会自动定位 CubeIDE 自带的 gcc/ninja/cmake）",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}\\cmake\\build.ps1", "Debug"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CMake: Build (Release)",
+      "detail": "同上，Release 配置（-Os）。产物在 build/Release/",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile", "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}\\cmake\\build.ps1", "Release"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash: CMake 产物 (pyOCD)",
+      "detail": "先用 GCC 编译 CMake 工程，再用 PowerDebugger 烧录 build/Debug/S27_TEST_2.elf",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "load",
+        "-t", "stm32h723xx",
+        "-O", "connect_mode=attach",
+        "--format", "elf",
+        "${workspaceFolder}/build/Debug/S27_TEST_2.elf"
+      ],
+      "dependsOn": "CMake: Build (Debug)",
+      "problemMatcher": []
     }
   ]
 }

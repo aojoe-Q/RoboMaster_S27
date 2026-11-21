@@ -35,6 +35,36 @@
     },
     {
       "type": "cortex-debug",
+      "request": "launch",
+      "name": "Debug: CMake 产物 (GCC 编译+烧录+调试)",
+      "servertype": "pyocd",
+      "serverpath": "${env:PYOCD}",
+      "serverArgs": [
+        "-O", "connect_mode=attach",
+        "-O", "reset_type=sysresetreq"
+      ],
+      "overrideGDBServerStartedRegex": "GDB server listening on port",
+      "targetId": "stm32h723xx",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/Debug/S27_TEST_2.elf",
+      "device": "STM32H723VG",
+      "interface": "swd",
+      "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
+      "gdbPath": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",
+      "overrideLaunchCommands": [
+        "interpreter-exec console \"set mem inaccessible-by-default off\"",
+        "interpreter-exec console \"monitor reset halt\""
+      ],
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      },
+      "runToEntryPoint": "main",
+      "showDevDebugOutput": "none",
+      "preLaunchTask": "Flash: CMake 产物 (pyOCD)"
+    },
+    {
+      "type": "cortex-debug",
       "request": "attach",
       "name": "Attach: PowerDebugger (不烧录, 挂到运行中的板子)",
       "servertype": "pyocd",
