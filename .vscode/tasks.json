@@ -1,0 +1,166 @@
+{
+  // 所有本机路径都走环境变量，换电脑只需跑一遍 tools/setup-vscode.ps1
+  // 变量：PYOCD / PYTHON / ARM_TOOLCHAIN_PATH / CUBE_PROG / KEIL_UV4
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Keil: Build",
+      "detail": "用 Keil MDK 命令行增量编译 MDK-ARM/project.uvprojx（经 build.cmd 包装，不会卡住）",
+      "type": "process",
+      "command": "cmd.exe",
+      "args": ["/c", "${workspaceFolder}\\MDK-ARM\\build.cmd", "-b"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Keil: Rebuild",
+      "detail": "用 Keil MDK 命令行全量重编译",
+      "type": "process",
+      "command": "cmd.exe",
+      "args": ["/c", "${workspaceFolder}\\MDK-ARM\\build.cmd", "-r"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash: PowerDebugger (pyOCD)",
+      "detail": "编译 + 用创芯工坊 PowerDebugger(CMSIS-DAP) 烧录 project.hex",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "load",
+        "-t", "stm32h723xx",
+        "-O", "connect_mode=attach",
+        "--format", "hex",
+        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.hex"
+      ],
+      "dependsOn": "Keil: Build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash only: PowerDebugger (pyOCD)",
+      "detail": "不编译，直接把已有 project.hex 烧进芯片",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "load",
+        "-t", "stm32h723xx",
+        "-O", "connect_mode=attach",
+        "--format", "hex",
+        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.hex"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash: PowerDebugger (axf)",
+      "detail": "烧录 .axf（带调试符号）",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "load",
+        "-t", "stm32h723xx",
+        "-O", "connect_mode=attach",
+        "--format", "elf",
+        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Erase: PowerDebugger (chip)",
+      "detail": "整片擦除 STM32H723 内部 Flash",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "erase",
+        "-t", "stm32h723xx",
+        "-O", "connect_mode=attach",
+        "--chip"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Reset: PowerDebugger",
+      "detail": "复位目标板并运行",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "reset",
+        "-t", "stm32h723xx",
+        "-O", "connect_mode=attach",
+        "-O", "reset_type=sysresetreq"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Probe: 列出调试器",
+      "detail": "检查 PowerDebugger 是否被 pyOCD 识别",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": ["list"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Live Watch: ArmData (运行中看数据)",
+      "detail": "程序全速运行、不停机不打断，通过 SWD 以 ~20Hz 采样 ArmData 并刷新表格（先关掉调试会话，探针同一时刻只能被一个进程占用）",
+      "type": "process",
+      "command": "${env:PYTHON}",
+      "args": [
+        "${workspaceFolder}/.vscode/live_watch.py",
+        "--elf", "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "--rate", "20"
+      ],
+      "options": {
+        "env": {
+          "PYTHONIOENCODING": "utf-8",
+          "PYTHONUTF8": "1",
+          "ARM_TOOLCHAIN_PATH": "${env:ARM_TOOLCHAIN_PATH}"
+        }
+      },
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true, "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Live Watch: ArmData (同时存 CSV)",
+      "detail": "同上，并把每个采样点写入 armdata_log.csv（可用 Excel/Python 画曲线）",
+      "type": "process",
+      "command": "${env:PYTHON}",
+      "args": [
+        "${workspaceFolder}/.vscode/live_watch.py",
+        "--elf", "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "--rate", "50",
+        "--csv", "${workspaceFolder}/armdata_log.csv"
+      ],
+      "options": {
+        "env": {
+          "PYTHONIOENCODING": "utf-8",
+          "PYTHONUTF8": "1",
+          "ARM_TOOLCHAIN_PATH": "${env:ARM_TOOLCHAIN_PATH}"
+        }
+      },
+      "presentation": { "reveal": "always", "panel": "dedicated", "focus": true, "clear": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash: ST-Link (hex)",
+      "type": "process",
+      "command": "${env:CUBE_PROG}",
+      "args": [
+        "-c", "port=SWD", "mode=UR",
+        "-w", "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.hex",
+        "-v", "-rst"
+      ],
+      "dependsOn": "Keil: Build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash: ST-Link (elf, debug info)",
+      "type": "process",
+      "command": "${env:CUBE_PROG}",
+      "args": [
+        "-c", "port=SWD", "mode=UR",
+        "-w", "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "-v", "-rst"
+      ],
+      "dependsOn": "Keil: Build",
+      "problemMatcher": []
+    }
+  ]
+}

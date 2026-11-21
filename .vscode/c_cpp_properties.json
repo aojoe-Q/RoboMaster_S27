@@ -1,0 +1,85 @@
+{
+    "configurations": [
+        {
+            "name": "STM32H723VGTx (Keil ARMCLANG 6)",
+            "includePath": [
+                "${workspaceFolder}",
+                "${workspaceFolder}/Core/Inc",
+                "${workspaceFolder}/Drivers/STM32H7xx_HAL_Driver/Inc",
+                "${workspaceFolder}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32H7xx/Include",
+                "${workspaceFolder}/Drivers/CMSIS/Include",
+                "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source/include",
+                "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
+                "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F",
+                "${workspaceFolder}/Application/Task/Inc",
+                "${workspaceFolder}/Components/Device/Inc",
+                "${workspaceFolder}/Components/Controller/Inc",
+                "${workspaceFolder}/Components/Algorithm/Inc",
+                "${workspaceFolder}/BSP/Inc",
+                "${workspaceFolder}/SystemView/SEGGER/Syscalls",
+                "${workspaceFolder}/SystemView/Sample/FreeRTOSV10",
+                "${workspaceFolder}/SystemView/Sample/FreeRTOSV10/Patch",
+                "${workspaceFolder}/SystemView/Config",
+                "${workspaceFolder}/SystemView/SEGGER",
+                "${workspaceFolder}/Middlewares/ST/ARM/DSP/Inc",
+                "${workspaceFolder}/USB_DEVICE/App",
+                "${workspaceFolder}/USB_DEVICE/Target",
+                "${workspaceFolder}/Middlewares/ST/STM32_USB_Device_Library/Core/Inc",
+                "${workspaceFolder}/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc",
+                "${workspaceFolder}/APP",
+                "${workspaceFolder}/APP/Compat",
+                "${workspaceFolder}/Modules"
+            ],
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32H723xx",
+                "ARM_MATH_CM7",
+                "__FPU_PRESENT=1U",
+                "ARM_MATH_CHECK"
+            ],
+            "compilerPath": "${env:ARMCLANG}",
+            "compilerArgs": [
+                "--target=arm-arm-none-eabi",
+                "-mcpu=cortex-m7"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-clang-arm",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "${workspaceFolder}/Core/Inc",
+                    "${workspaceFolder}/Drivers/STM32H7xx_HAL_Driver/Inc",
+                    "${workspaceFolder}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy",
+                    "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32H7xx/Include",
+                    "${workspaceFolder}/Drivers/CMSIS/Include",
+                    "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source/include",
+                    "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
+                    "${workspaceFolder}/Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F",
+                    "${workspaceFolder}/Application/Task/Inc",
+                    "${workspaceFolder}/Components/Device/Inc",
+                    "${workspaceFolder}/Components/Controller/Inc",
+                    "${workspaceFolder}/Components/Algorithm/Inc",
+                    "${workspaceFolder}/BSP/Inc",
+                    "${workspaceFolder}/SystemView/SEGGER/Syscalls",
+                    "${workspaceFolder}/SystemView/Sample/FreeRTOSV10",
+                    "${workspaceFolder}/SystemView/Sample/FreeRTOSV10/Patch",
+                    "${workspaceFolder}/SystemView/Config",
+                    "${workspaceFolder}/SystemView/SEGGER",
+                    "${workspaceFolder}/Middlewares/ST/ARM/DSP/Inc",
+                    "${workspaceFolder}/USB_DEVICE/App",
+                    "${workspaceFolder}/USB_DEVICE/Target",
+                    "${workspaceFolder}/Middlewares/ST/STM32_USB_Device_Library/Core/Inc",
+                    "${workspaceFolder}/Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Inc",
+                    "${workspaceFolder}/APP",
+                    "${workspaceFolder}/APP/Compat",
+                    "${workspaceFolder}/Modules"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db"
+            }
+        }
+    ],
+    "version": 4
+}
