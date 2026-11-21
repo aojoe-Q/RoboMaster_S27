@@ -18,19 +18,41 @@
 | `SystemView/` | SEGGER RTT 调试组件 |
 | `Middlewares/` | FreeRTOS、STM32 USB Device、ARM DSP |
 | `Drivers/` | ST HAL 与 CMSIS |
-| `MDK-ARM/` | Keil 工程 `project.uvprojx`、启动文件、散列文件 `COD_H7_Template.sct` |
+| `MDK-ARM/` | Keil 工程 `project.uvprojx`、armasm 启动文件、散列文件 `COD_H7_Template.sct` |
+| `Core/Startup/` | GCC 版启动文件（给 CMake 构建用，与 `MDK-ARM/` 那份并存） |
+| `cmake/` | 交叉编译工具链文件、`build.ps1` / `build.sh` 一键脚本、构建说明 |
 | `tools/selftest/` | 主机侧回归自测（不需要硬件） |
 | `docs/` | 配置与说明文档 |
 
 ## 编译与烧录
 
-任选一种：
+两套构建并存，产物等价，任选一种：
 
-1. **VS Code**（推荐）：`Ctrl+Shift+B`，走 `MDK-ARM/build.cmd` → `UV4.exe -b`，只编译不烧录。
-2. **Keil**：打开 `MDK-ARM/project.uvprojx`，F7 编译。
-3. 烧录用 pyOCD 或 STM32CubeProgrammer，配置见 `.vscode/tasks.json`。
+**A. CMake + arm-none-eabi-gcc（不需要 Keil）**
 
+```powershell
+.\cmake\build.ps1            # 配置 + 编译 Debug，产物在 build/Debug/
+.\cmake\build.ps1 Release    # Release 配置（-Os）
+```
+
+脚本会自动找 `arm-none-eabi-gcc` / `ninja` / `cmake`（先看 PATH，再看 `ARM_TOOLCHAIN_PATH`，最后找 STM32CubeIDE 自带的那套）。也可以直接用 CMake：
+
+```powershell
+cmake --preset Debug
+cmake --build --preset Debug
+```
+
+产出 `build/Debug/S27_TEST_2.elf` / `.hex` / `.bin`。`build/` 已在 `.gitignore` 里。
+
+**B. Keil + ARMCLANG**
+
+1. **VS Code**：`Ctrl+Shift+B`，走 `MDK-ARM/build.cmd` → `UV4.exe -b`，只编译不烧录。
+2. **Keil 界面**：打开 `MDK-ARM/project.uvprojx`，F7 编译。
+
+> 两套构建各自独立：CMake 用 `Core/Startup/startup_stm32h723xx.s`（GCC 语法）+ `STM32H723VGTX_FLASH.ld`；Keil 用 `MDK-ARM/startup_stm32h723xx.s`（armasm）+ `COD_H7_Template.sct`。**加/删源文件时两边都要改**。
 > 改了 `.uvprojx`、启动文件或散列文件后，Keil 要**关掉重开**并 Rebuild 全量，增量编译会用到旧 `.o`。
+
+烧录用 pyOCD 或 STM32CubeProgrammer，配置见 `.vscode/tasks.json`（`Flash: CMake 产物` 那条走 pyOCD 烧 `build/Debug/S27_TEST_2.elf`）。
 
 主机自测（gcc 编译真实函数体，不碰硬件）：
 
@@ -69,6 +91,7 @@ ROS 2 侧代码已独立到 `aojoe-Q/ARM_ROS` 仓库，本仓库的 `ROS2.md` �
 
 | 日期 | 提交 | 改了什么 |
 |---|---|---|
+| 2026-11-22 | `afca975` | **新增 CMake + arm-none-eabi-gcc 构建**：`CMakeLists.txt`（按 `project.uvprojx` 翻译，含全部 180 余个源文件与头文件路径）、`CMakePresets.json`（Debug `-Og` / Release `-Os`，Ninja 生成器）、`cmake/gcc-arm-none-eabi.cmake`、GCC 语法启动文件 `Core/Startup/startup_stm32h723xx.s`、链接脚本 `STM32H723VGTX_FLASH.ld`、`cmake/build.ps1` 与 `build.sh` 一键脚本、`cmake/README.md`。`.vscode` 同步加三条任务：CMake Build (Debug/Release)、pyOCD 烧录 CMake 产物。**实测通过**：gcc 14.3.1 编译链接无错误，FLASH 91,956 B / DTCM 97,512 B，产出 `build/Debug/S27_TEST_2.elf`、`.hex`、`.bin`。Keil 构建未改动，两套并存。 |
 | 2026-11-21 | `09352b8` | **VS Code 配置参数化**：`tasks.json` / `launch.json` / `c_cpp_properties.json` 里的本机绝对路径全换成 `${env:...}`；`build.cmd` 首次入库并支持 `KEIL_UV4` 探测；新增 `tools/setup-vscode.ps1`（探测 7 个工具、写环境变量、生成 settings.json）与 `docs/VSCODE_SETUP.md`；`.gitignore` 重写（原来那份是坏 UTF-8）。换电脑 clone 后跑一次脚本即可。 |
 | 2026-11-21 | `e8358c0` | 新增 `PC_MODE.md`：记录 PC 模式三阶段接管的动机、行为对照、自测方法与回滚方式。纯文档。 |
 | 2026-11-21 | `1905d94` | 恢复 `84ec9ee` + `f304a09` 的内容（撤销 `be7dc7d` 的回退）。代码内容与 `f304a09` 一致。 |
@@ -89,5 +112,6 @@ ROS 2 侧代码已独立到 `aojoe-Q/ARM_ROS` 仓库，本仓库的 `ROS2.md` �
 
 ## 已知问题
 
+- `STM32H723VGTX_FLASH.ld` 目前 FLASH 区按整 1 MB 分配。若日后把「多圈掉电存储与恢复」分支合进 `main`，必须把 Sector 6/7（从 `0x080C0000` 起的 256 KB）从 FLASH 区排除，否则掉电保存的数据会被固件覆盖；Keil 那边的 `COD_H7_Template.sct` 已经是这么做的。
 - `APP/Arm_L_task.c:1202` 有一行 GBK 双重编码乱码注释（`d013e70` 引入），全工程仅此一处，不影响编译。
 - `LICENSE` 在 `5f524cb` 清理文档时被删，需要时用 `git checkout 62fce24 -- LICENSE` 取回。
