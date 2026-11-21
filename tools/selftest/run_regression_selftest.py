@@ -63,7 +63,7 @@ if sys.argv[1:] == ["--pc-only"]:
     sys.exit(0)
 parts = types + [pre, function(lib, "arm_data_ramp_init"), function(lib, "arm_ramp_calc")]
 parts += [function(arm, name) for name in ("limitPosition", "Arm_Powerless", "Arm_PrepareAndPublish",
-          "TAKE_POSE_1", "GetArmMode", "Arm_L_Movement_J1_J4", "Arm_L_Task")]
+          "TAKE_pose_1", "TAKE_pose_2", "ARM_reset", "GetArmMode", "ARM_rc", "Arm_L_Task")]
 run("arm_mode", parts + [post], ("bus_hold", "explicit", "loss", "reconnect", "grip_retry",
                                 "invalid", "debounce", "unready", "grip_limits"))
 
