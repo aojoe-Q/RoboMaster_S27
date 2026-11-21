@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -53,6 +54,13 @@ types = ["#include <stdint.h>\ntypedef float fp32;"]
 types += re.findall(r"^#define[ \t]+\w+[ \t]+[^\n]+", header, re.M)
 types += [typedef(header, name) for name in ("Arm_mode_t", "DM_contorl_t", "ArmData_t", "Custom_controller_t")]
 types += [typedef(lib_header, "ramp_function_source_t")]
+pc_pre, pc_post = (HERE / "pc_mode_selftest.c").read_text().split("/* REAL_FUNCTIONS */")
+pc_state = arm[arm.index("static ArmMotion pc_motion["):arm.index("void Arm_PC_Control_Enter(void)\n{")]
+pc_functions = [function(arm, name) for name in ("limitPosition", "Arm_Powerless",
+                "Arm_PrepareAndPublish", "Arm_PC_Control_Enter", "Arm_PC_Control")]
+run("pc_mode", types + [pc_pre, pc_state] + pc_functions + [pc_post], ("pc",))
+if sys.argv[1:] == ["--pc-only"]:
+    sys.exit(0)
 parts = types + [pre, function(lib, "arm_data_ramp_init"), function(lib, "arm_ramp_calc")]
 parts += [function(arm, name) for name in ("limitPosition", "Arm_Powerless", "Arm_PrepareAndPublish",
           "TAKE_POSE_1", "GetArmMode", "Arm_L_Movement_J1_J4", "Arm_L_Task")]

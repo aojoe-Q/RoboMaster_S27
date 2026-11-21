@@ -285,7 +285,8 @@ static void Arm_PrepareAndPublish(void)
 
     /* 更新夹爪混合系数 */
     float step = fminf(dt_ms * 0.01f, 0.16f);
-    if (Arm_L_Ready && grip_torque_mode)
+    uint8_t use_grip_torque = Arm_L_Ready && grip_torque_mode && ArmData.ArmMode != ARM_MODE_PC_CONTROL;
+    if (use_grip_torque)
         s_grip_blend = fminf(1.0f, s_grip_blend + step);
     else
         s_grip_blend = fmaxf(0.0f, s_grip_blend - step);
@@ -304,7 +305,7 @@ static void Arm_PrepareAndPublish(void)
     cmd.tick_ms = now;
 
     /* 叠加夹爪混合：当开关开启时，根据 blend 系数混合 Kp/Kd 和力矩 */
-    if (Arm_L_Ready && grip_torque_mode && !arm_output_diag.startup_failed) 
+    if (use_grip_torque && !arm_output_diag.startup_failed)
     {
         float blend = s_grip_blend;
         cmd.kp[6] *= 1.0f - blend;
@@ -827,26 +828,30 @@ uint8_t GetArmMode(void)
         retry_samples = 0U;
     }
 
-    /* 左上右上：只执行 PC 控制（覆盖原 TAKE_WATER）。PC 未使能、指令超时、
-       USB 断开或 CAN 反馈丢失时，Arm_PC_Control() 保持锁存的当前位置。 */
+    /* 左上右上：首次接受 PC 目标前无力；接管后丢失目标时保持位置。 */
 	if (switch_is_up(right) && switch_is_up(left))
 	{
 		// mode = ARM_RC;	
         mode = ARM_MODE_PC_CONTROL;
 	}
-	else if (switch_is_mid(right)&&switch_is_up(left))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 0
+    else if (switch_is_down(right)&&switch_is_up(left)) 
+	{
+		mode = ARM_RC;
+	}
+
+	else if (switch_is_mid(right)&&switch_is_up(left))  
 	{
 			mode = TAKE_POSE_2;
 	}
-	else if (switch_is_mid(right)&&switch_is_mid(left))  //RC_contorl.RC->rc.shutter == 1  //switch_is_up(right)&&switch_is_up(left)
+	else if (switch_is_mid(right)&&switch_is_mid(left))  
 	{
             mode = TAKE_POSE_1;
 	}
-	else if (switch_is_mid(right)&&switch_is_down(left))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
+	else if (switch_is_mid(right)&&switch_is_down(left))  
 	{
             mode = ARM_RESET;
 	}
-	// 	else if (switch_is_down(right)&&switch_is_up(left))  //left_button_press_count % 2 != 0&&RC_contorl.RC->rc.mode_sw == 2
+	// 	else if (switch_is_down(right)&&switch_is_up(left))  
 	// {
 	// 		mode = ARM_RC;
 	// }
@@ -1148,31 +1153,27 @@ void Arm_Powerless(void)
 /* PC 控制链路的持久状态（static，仅本文件可见）
  *   pc_motion[7]     每关节一维运动插补器（实现见 arm_motion.h）
  *   pc_last_ms       上一拍时间戳(ms)，用于计算 dt
- *   pc_motion_valid  上一拍是否拿到有效目标；0 时下一拍用实测位置重置插补器
- *   pc_holding       是否已锁存保持位置：丢包/超时后原地保持，避免掉臂
+ *   pc_phase         首次接管前无力，跟随过有效目标后才允许保持
  */
 static ArmMotion pc_motion[7];
 static uint32_t pc_last_ms;
-static uint8_t pc_motion_valid;
-static uint8_t pc_holding = 0;   /* 1: 已锁存保持位置 */
+static enum { PC_READ_ONLY, PC_TRACKING, PC_HOLDING } pc_phase = PC_READ_ONLY;
 
-/* 每次进入 PC 模式时调用：下一次没有有效目标时重新锁存当前位置 */
 /* Arm_PC_Control_Enter() —— 进入 PC 模式时的一次性复位
  * 参数/返回：无
  * 调用：模式切换检测中，切入 ARM_MODE_PC_CONTROL 的那一拍调用一次。
- * 作用：清 pc_holding 与 pc_motion_valid，强制下一帧有效目标到达时用实测位置
+ * 作用：回到只读无力状态，强制下一帧有效目标到达时用实测位置
  *       重建插补器，避免沿用进入前的旧目标。
  */
 void Arm_PC_Control_Enter(void)
 {
-	pc_holding = 0;
-    pc_motion_valid = 0U;
+    pc_phase = PC_READ_ONLY;
     pc_last_ms = xTaskGetTickCount()*portTICK_PERIOD_MS; // 记录时间基准：下一拍的 dt 从这里起算
 }
 
 /* Arm_PC_Control() —— 上位机（ROS 2 / MoveIt）控制
  * 输入：Arm_USB_Get_PC_Command() 返回目标位置 pc_target[7] 与本拍速度上限 vmax[7]
- * 流程：写 PD 增益 -> 取目标 -> 每关节限速限加速插补 -> 赋 send_set -> 静态限位
+ * 流程：取目标 -> 只读时撤力，否则写 PD 增益 -> 插补或保持 -> 静态限位
  *       -> 同步斜坡状态量
  * 注意：目标有效时不做 arm_ramp 斜坡（插补已在 Arm_Motion_Step 里做）；丢包/超时/
  *       断开时锁存进入失效时的位置并保持（安全动作），不会掉臂。
@@ -1184,6 +1185,20 @@ void Arm_PC_Control(void)
 	uint8_t got_target;
     float vmax[7];
 
+    got_target = Arm_USB_Get_PC_Command(pc_target, vmax);
+    uint32_t now_ms = xTaskGetTickCount()*portTICK_PERIOD_MS;
+    float dt = (float)(now_ms-pc_last_ms)*0.001f;
+    pc_last_ms = now_ms;
+    for (uint8_t joint = 0; joint < 7U; ++joint)
+    {
+        arm_joint_control[joint]->torque = 0.0f;
+    }
+    if (!got_target && pc_phase == PC_READ_ONLY)
+    {
+        Arm_Powerless();
+        return;
+    }
+
 	/* 璁剧疆姝ｅ父 PID 澧炵泭锛堝弬鏁颁笉鍙橈級 */
 	ArmData.J1.Kp = J1_PID_KP; ArmData.J1.Kd = J1_PID_KD; // 每拍重写 PD 增益：保证从其他模式切回后增益正确
 	ArmData.J2.Kp = J2_PID_KP; ArmData.J2.Kd = J2_PID_KD;
@@ -1193,30 +1208,20 @@ void Arm_PC_Control(void)
 	ArmData.J6.Kp = J6_PID_KP; ArmData.J6.Kd = J6_PID_KD;
 	ArmData.Grip.Kp = J6_PID_KP; ArmData.Grip.Kd = J6_PID_KD; // 夹爪这里沿用 J6 的 PD 宏（Grip 自己的宏在本函数未使用）
 
-	/* 尝试读取 PC 目标（USB 任务已检查会话、使能、超时、USB 连接、CAN 反馈） */
-	got_target = Arm_USB_Get_PC_Command(pc_target, vmax); // USB 侧已做完会话/使能/超时/USB 连接/CAN 反馈检查；返回 0 表示本拍无有效目标
-    uint32_t now_ms = xTaskGetTickCount()*portTICK_PERIOD_MS;
-    float dt = (float)(now_ms-pc_last_ms)*0.001f; // 与上一拍的时间差（s），用于插补积分
-    pc_last_ms = now_ms;
     if (got_target) 
     { // 只有拿到有效目标才推进插补器
         const DM_contorl_t *joint[7] = {&ArmData.J1,&ArmData.J2,&ArmData.J3,
             &ArmData.J4,&ArmData.J5,&ArmData.J6,&ArmData.Grip};
         for (unsigned n=0; n<7; ++n) 
         {
-            if (!pc_motion_valid) 
+            if (pc_phase != PC_TRACKING)
             {
                  pc_motion[n].position=joint[n]->position; pc_motion[n].velocity=0.0f; 
             } // 刚进 PC 模式或上次无目标：用实测位置重置插补器，速度清零
             pc_target[n] = Arm_Motion_Step(&pc_motion[n], pc_target[n], vmax[n], dt); // 逐关节插补：速度上限 vmax[n]、加速度上限 ARM_PC_AMAX_RAD_S2
         }
-        pc_motion_valid=1U;
-    } else pc_motion_valid=0U; // 目标无效：下一拍重新用实测位置起算
-
-	if (got_target)
-	{
 		/* 目标有效：跟随 PC 指令 */
-		pc_holding = 0; // 目标恢复有效：退出保持状态
+		pc_phase = PC_TRACKING;
 		ArmData.J1.send_set = pc_target[0]; // 直接赋 send_set：插补已在上面的 Arm_Motion_Step 完成，这里不再走 arm_ramp
 		ArmData.J2.send_set = pc_target[1];
 		ArmData.J3.send_set = pc_target[2];
@@ -1228,7 +1233,7 @@ void Arm_PC_Control(void)
 	else
 	{
 		/* 目标无效（超时/断开/CAN 丢失）：锁存并保持当前位置（安全动作 A） */
-		if (!pc_holding)
+		if (pc_phase != PC_HOLDING)
 		{
 			hold_position[0] = ArmData.J1.position; // 只在失效的第一拍锁存一次，之后一直沿用这组位置
 			hold_position[1] = ArmData.J2.position;
@@ -1237,7 +1242,7 @@ void Arm_PC_Control(void)
 			hold_position[4] = ArmData.J5.position;
 			hold_position[5] = ArmData.J6.position;
 			hold_position[6] = ArmData.Grip.position;
-			pc_holding = 1;
+			pc_phase = PC_HOLDING;
 		}
 		ArmData.J1.send_set = hold_position[0]; // 保持位置不变：既不跟随 PC，也不继续插补
 		ArmData.J2.send_set = hold_position[1];
