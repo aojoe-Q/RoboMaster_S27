@@ -96,21 +96,21 @@ int main(int argc,char **argv) {
     if (!strcmp(scenario,"grip_limits")) {
         RCData.rc.ch[3]=660;
         for(unsigned n=0;n<100;n++) {
-            Arm_L_Movement_J1_J4();ArmData.Grip.position=ArmData.Grip.send_set;
+            ARM_rc();ArmData.Grip.position=ArmData.Grip.send_set;
         }
         assert(ArmData.Grip.send_set>-5.9f && ArmData.Grip.RC_Sum_Value>0);
         /* Exercise both end stops and a nonzero keyboard offset. */
         ArmData.Grip.Key_Control_Value=0.25f;
         for(unsigned n=0;n<3000;n++) {
-            Arm_L_Movement_J1_J4();ArmData.Grip.position=ArmData.Grip.send_set;
+            ARM_rc();ArmData.Grip.position=ArmData.Grip.send_set;
         }
         assert(fabsf(ArmData.Grip.send_set-Grip_Max_position)<1e-4f);
         RCData.rc.ch[3]=-660;
         for(unsigned n=0;n<3000;n++) {
-            Arm_L_Movement_J1_J4();ArmData.Grip.position=ArmData.Grip.send_set;
+            ARM_rc();ArmData.Grip.position=ArmData.Grip.send_set;
         }
         assert(fabsf(ArmData.Grip.send_set-Grip_Min_position)<1e-4f);
-        RCData.rc.ch[3]=660;Arm_L_Movement_J1_J4();
+        RCData.rc.ch[3]=660;ARM_rc();
         assert(ArmData.Grip.send_set>Grip_Min_position);
     } else {
         if (!setjmp(exit_loop)) Arm_L_Task();
