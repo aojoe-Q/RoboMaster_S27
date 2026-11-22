@@ -1,0 +1,66 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "Debug",
+      "inherits": "base",
+      "displayName": "Debug (Ninja, -Og -g3)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "Release",
+      "inherits": "base",
+      "displayName": "Release (Ninja, -Os)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "Linux-Debug",
+      "inherits": "Debug",
+      "displayName": "Linux Debug (Make, -Og -g3)",
+      "generator": "Unix Makefiles"
+    },
+    {
+      "name": "Linux-Release",
+      "inherits": "Release",
+      "displayName": "Linux Release (Make, -Os)",
+      "generator": "Unix Makefiles"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "Debug",
+      "configurePreset": "Debug"
+    },
+    {
+      "name": "Release",
+      "configurePreset": "Release"
+    },
+    {
+      "name": "Linux-Debug",
+      "configurePreset": "Linux-Debug"
+    },
+    {
+      "name": "Linux-Release",
+      "configurePreset": "Linux-Release"
+    }
+  ]
+}

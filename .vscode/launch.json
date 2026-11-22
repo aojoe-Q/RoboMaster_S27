@@ -1,0 +1,212 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "PowerDebugger (自动选择系统)",
+      "type": "cortex-debug",
+      "request": "launch",
+      "servertype": "pyocd",
+      "serverpath": "${config:cortex-debug.pyocdPath}",
+      "serverArgs": [
+        "-O",
+        "connect_mode=attach",
+        "-O",
+        "reset_type=sysresetreq",
+        "--no-wait"
+      ],
+      "overrideGDBServerStartedRegex": "GDB server listening on port",
+      "targetId": "stm32h723xx",
+      "device": "STM32H723VG",
+      "interface": "swd",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/Linux-Debug/S27_TEST_2.elf",
+      "gdbPath": "${config:cortex-debug.gdbPath}",
+      "armToolchainPath": "${config:cortex-debug.armToolchainPath}",
+      "toolchainPrefix": "arm-none-eabi",
+      "overrideLaunchCommands": [
+        "interpreter-exec console \"set mem inaccessible-by-default off\"",
+        "interpreter-exec console \"monitor reset halt\""
+      ],
+      "runToEntryPoint": "main",
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      },
+      "showDevDebugOutput": "none",
+      "internalConsoleOptions": "openOnSessionStart",
+      "preLaunchTask": "Flash: Debug (自动选择系统)",
+      "windows": {
+        "serverpath": "${env:PYOCD}",
+        "gdbPath": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",
+        "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
+        "executable": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf"
+      }
+    },
+    {
+      "name": "PowerDebugger Attach (自动选择系统)",
+      "type": "cortex-debug",
+      "request": "attach",
+      "servertype": "pyocd",
+      "serverpath": "${config:cortex-debug.pyocdPath}",
+      "serverArgs": [
+        "-O",
+        "connect_mode=attach",
+        "-O",
+        "reset_type=sysresetreq",
+        "--no-wait"
+      ],
+      "overrideGDBServerStartedRegex": "GDB server listening on port",
+      "targetId": "stm32h723xx",
+      "device": "STM32H723VG",
+      "interface": "swd",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/Linux-Debug/S27_TEST_2.elf",
+      "gdbPath": "${config:cortex-debug.gdbPath}",
+      "armToolchainPath": "${config:cortex-debug.armToolchainPath}",
+      "toolchainPrefix": "arm-none-eabi",
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      },
+      "showDevDebugOutput": "none",
+      "internalConsoleOptions": "openOnSessionStart",
+      "preLaunchTask": "Linux: Check Debug Tools",
+      "overrideAttachCommands": [
+        "interpreter-exec console \"set mem inaccessible-by-default off\""
+      ],
+      "windows": {
+        "serverpath": "${env:PYOCD}",
+        "gdbPath": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",
+        "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
+        "executable": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "preLaunchTask": ""
+      }
+    },
+    {
+      "type": "cortex-debug",
+      "request": "launch",
+      "name": "Debug: PowerDebugger (编译+烧录+调试)",
+      "servertype": "pyocd",
+      "serverpath": "${env:PYOCD}",
+      "serverArgs": [
+        "-O",
+        "connect_mode=attach",
+        "-O",
+        "reset_type=sysresetreq"
+      ],
+      "overrideGDBServerStartedRegex": "GDB server listening on port",
+      "targetId": "stm32h723xx",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+      "device": "STM32H723VG",
+      "interface": "swd",
+      "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
+      "gdbPath": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",
+      "overrideLaunchCommands": [
+        "interpreter-exec console \"set mem inaccessible-by-default off\"",
+        "interpreter-exec console \"monitor reset halt\""
+      ],
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      },
+      "runToEntryPoint": "main",
+      "showDevDebugOutput": "none",
+      "preLaunchTask": "Flash: PowerDebugger (pyOCD)"
+    },
+    {
+      "type": "cortex-debug",
+      "request": "launch",
+      "name": "Debug: CMake 产物 (GCC 编译+烧录+调试)",
+      "servertype": "pyocd",
+      "serverpath": "${env:PYOCD}",
+      "serverArgs": [
+        "-O",
+        "connect_mode=attach",
+        "-O",
+        "reset_type=sysresetreq"
+      ],
+      "overrideGDBServerStartedRegex": "GDB server listening on port",
+      "targetId": "stm32h723xx",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/Debug/S27_TEST_2.elf",
+      "device": "STM32H723VG",
+      "interface": "swd",
+      "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
+      "gdbPath": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",
+      "overrideLaunchCommands": [
+        "interpreter-exec console \"set mem inaccessible-by-default off\"",
+        "interpreter-exec console \"monitor reset halt\""
+      ],
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      },
+      "runToEntryPoint": "main",
+      "showDevDebugOutput": "none",
+      "preLaunchTask": "Flash: CMake 产物 (pyOCD)"
+    },
+    {
+      "type": "cortex-debug",
+      "request": "attach",
+      "name": "Attach: PowerDebugger (不烧录, 挂到运行中的板子)",
+      "servertype": "pyocd",
+      "serverpath": "${env:PYOCD}",
+      "serverArgs": [
+        "-O",
+        "connect_mode=attach",
+        "-O",
+        "reset_type=sysresetreq"
+      ],
+      "overrideGDBServerStartedRegex": "GDB server listening on port",
+      "targetId": "stm32h723xx",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+      "device": "STM32H723VG",
+      "interface": "swd",
+      "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
+      "gdbPath": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",
+      "overrideAttachCommands": [
+        "interpreter-exec console \"set mem inaccessible-by-default off\""
+      ],
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      },
+      "showDevDebugOutput": "none"
+    },
+    {
+      "type": "cortex-debug",
+      "request": "launch",
+      "name": "Debug: ST-Link (需 ST-Link 硬件, 当前未接)",
+      "servertype": "stlink",
+      "serverpath": "${env:STLINK_GDB}",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+      "device": "STM32H723VG",
+      "interface": "swd",
+      "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
+      "gdbPath": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",
+      "runToEntryPoint": "main",
+      "showDevDebugOutput": "none",
+      "preLaunchTask": "Keil: Build"
+    },
+    {
+      "type": "stlinkgdbtarget",
+      "request": "launch",
+      "name": "Debug: ST-Link (STM32Cube 扩展, 需 ST-Link 硬件)",
+      "origin": "manual",
+      "cwd": "${workspaceFolder}",
+      "program": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+      "deviceName": "STM32H723VGTx",
+      "deviceCore": "Cortex-M7",
+      "gdb": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",
+      "serverExe": "${env:STLINK_GDB}",
+      "runEntry": "main",
+      "verbose": false,
+      "openGdbConsole": false,
+      "preBuild": "",
+      "preLaunchTask": "Keil: Build"
+    }
+  ]
+}

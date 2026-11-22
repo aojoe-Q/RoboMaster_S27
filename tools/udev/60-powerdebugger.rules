@@ -1,0 +1,4 @@
+# ICWorkshop PowerDebugger Wireless TX (303a:40ff).
+# Grant the active desktop user and plugdev group access to CMSIS-DAP USB/HID.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="303a", ATTR{idProduct}=="40ff", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="40ff", MODE="0660", GROUP="plugdev", TAG+="uaccess"

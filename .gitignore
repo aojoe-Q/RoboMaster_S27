@@ -1,0 +1,68 @@
+# ================= Keil MDK 编译产物 =================
+*.o
+*.d
+*.crf
+*.axf
+*.elf
+*.hex
+*.bin
+*.map
+*.lst
+*.htm
+*.dep
+*.lnp
+*.sct
+*.iex
+*.bak
+*.build_log.htm
+*.__i
+*.scvd
+
+# ================= Keil 用户本地配置 =================
+*.uvguix.*
+*.uvoptx
+JLinkLog.txt
+JLinkSettings.ini
+RTE/_*
+
+# ================= 编译输出目录 =================
+MDK-ARM/*/Objects/
+MDK-ARM/*/Listings/
+MDK-ARM/*/DebugConfig/
+Objects/
+Listings/
+DebugConfig/
+build/
+Build/
+
+# ================= 系统 / 编辑器 =================
+Thumbs.db
+Desktop.ini
+.DS_Store
+# VS Code：tasks / launch / c_cpp_properties / live_watch 已入库（路径全走环境变量）
+# settings.json 是本机生成物，由 tools/setup-vscode.ps1 生成，不入库
+.vscode/settings.json
+.vscode/settings.json.bak
+.vscode/browse.vc.db*
+.vscode/ipch/
+# Keil Assistant 扩展在工程子目录留下的旧日志/配置（2025 年的残留）
+MDK-ARM/.vscode/
+.idea/
+*.swp
+*~
+
+# ================= 日志 / 缓存 =================
+*.log
+__pycache__/
+*.pyc
+# ===== S27_TEST_2 专属 =====
+_backup_*/
+_archived_*/
+tools/selftest/build/
+
+# 链接脚本是手写的，不能丢（*.sct 规则会误伤）
+!MDK-ARM/COD_H7_Template/COD_H7_Template.sct
+
+# clangd / 编译数据库（本机生成，不入库）
+.cache/
+compile_commands.json

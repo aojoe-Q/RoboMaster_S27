@@ -1,0 +1,649 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build: Rebuild (自动选择系统)",
+      "detail": "自动选择：Linux ARM GCC + Make；Windows Keil ARMCLANG；全量重编译并显示诊断",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/cmake/build.sh",
+        "Debug",
+        "--clean-first"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "owner": "s27-gcc",
+          "source": "ARM GCC",
+          "fileLocation": "absolute",
+          "applyTo": "allDocuments"
+        }
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true,
+        "revealProblems": "onProblem"
+      },
+      "windows": {
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/tools/build-windows-keil.ps1",
+          "-Rebuild"
+        ],
+        "problemMatcher": [
+          {
+            "base": "$gcc",
+            "owner": "s27-gcc",
+            "source": "ARMCLANG",
+            "fileLocation": [
+              "autoDetect",
+              "${workspaceFolder}/MDK-ARM"
+            ],
+            "applyTo": "allDocuments"
+          },
+          {
+            "owner": "s27-keil",
+            "source": "ARMCLANG",
+            "fileLocation": [
+              "autoDetect",
+              "${workspaceFolder}/MDK-ARM"
+            ],
+            "applyTo": "allDocuments",
+            "pattern": {
+              "regexp": "^(.+?)\\((\\d+)\\):\\s*(?:fatal\\s+)?(warning|error):\\s*(.*)$",
+              "file": 1,
+              "line": 2,
+              "severity": 3,
+              "message": 4
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "Build: Debug (自动选择系统)",
+      "detail": "自动选择：Linux ARM GCC + Make；Windows Keil ARMCLANG",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/cmake/build.sh",
+        "Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "owner": "s27-gcc",
+          "source": "ARM GCC",
+          "fileLocation": "absolute",
+          "applyTo": "allDocuments"
+        }
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true,
+        "revealProblems": "onProblem"
+      },
+      "windows": {
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/tools/build-windows-keil.ps1"
+        ],
+        "problemMatcher": [
+          {
+            "base": "$gcc",
+            "owner": "s27-gcc",
+            "source": "ARMCLANG",
+            "fileLocation": [
+              "autoDetect",
+              "${workspaceFolder}/MDK-ARM"
+            ],
+            "applyTo": "allDocuments"
+          },
+          {
+            "owner": "s27-keil",
+            "source": "ARMCLANG",
+            "fileLocation": [
+              "autoDetect",
+              "${workspaceFolder}/MDK-ARM"
+            ],
+            "applyTo": "allDocuments",
+            "pattern": {
+              "regexp": "^(.+?)\\((\\d+)\\):\\s*(?:fatal\\s+)?(warning|error):\\s*(.*)$",
+              "file": 1,
+              "line": 2,
+              "severity": 3,
+              "message": 4
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "Flash: Debug (自动选择系统)",
+      "detail": "自动选择系统，依次编译、烧录，随后由 F5 启动调试",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/tools/flash-linux-debug.sh",
+        "${config:cortex-debug.pyocdPath}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": false,
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "owner": "s27-gcc",
+          "source": "ARM GCC",
+          "fileLocation": "absolute",
+          "applyTo": "allDocuments"
+        }
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true,
+        "clear": true,
+        "revealProblems": "never"
+      },
+      "windows": {
+        "command": "powershell.exe",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/tools/flash-windows-debug.ps1"
+        ],
+        "problemMatcher": [
+          {
+            "base": "$gcc",
+            "owner": "s27-gcc",
+            "source": "ARMCLANG",
+            "fileLocation": [
+              "autoDetect",
+              "${workspaceFolder}/MDK-ARM"
+            ],
+            "applyTo": "allDocuments"
+          },
+          {
+            "owner": "s27-keil",
+            "source": "ARMCLANG",
+            "fileLocation": [
+              "autoDetect",
+              "${workspaceFolder}/MDK-ARM"
+            ],
+            "applyTo": "allDocuments",
+            "pattern": {
+              "regexp": "^(.+?)\\((\\d+)\\):\\s*(?:fatal\\s+)?(warning|error):\\s*(.*)$",
+              "file": 1,
+              "line": 2,
+              "severity": 3,
+              "message": 4
+            }
+          }
+        ]
+      }
+    },
+    {
+      "label": "Linux: Build (Debug)",
+      "detail": "ARM GCC + Make，配置并编译固件，产物在 build/Linux-Debug/；显示编译命令、警告和尺寸，日志保存到对应 build.log",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/cmake/build.sh",
+        "Debug"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "owner": "s27-gcc",
+          "source": "ARM GCC",
+          "fileLocation": "absolute",
+          "applyTo": "allDocuments"
+        }
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true,
+        "revealProblems": "onProblem"
+      }
+    },
+    {
+      "label": "Linux: Build (Release)",
+      "detail": "ARM GCC + Make，编译 Release 固件，产物在 build/Linux-Release/；显示编译命令、警告和尺寸，日志保存到对应 build.log",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/cmake/build.sh",
+        "Release"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "owner": "s27-gcc",
+          "source": "ARM GCC",
+          "fileLocation": "absolute",
+          "applyTo": "allDocuments"
+        }
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true,
+        "revealProblems": "onProblem"
+      }
+    },
+    {
+      "label": "Keil: Build",
+      "detail": "用 Keil MDK 命令行增量编译 MDK-ARM/project.uvprojx（经 build.cmd 包装，不会卡住）",
+      "type": "process",
+      "command": "cmd.exe",
+      "args": [
+        "/c",
+        "${workspaceFolder}\\MDK-ARM\\build.cmd",
+        "-b"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Keil: Rebuild",
+      "detail": "用 Keil MDK 命令行全量重编译",
+      "type": "process",
+      "command": "cmd.exe",
+      "args": [
+        "/c",
+        "${workspaceFolder}\\MDK-ARM\\build.cmd",
+        "-r"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash: PowerDebugger (pyOCD)",
+      "detail": "编译 + 用创芯工坊 PowerDebugger(CMSIS-DAP) 烧录 project.hex",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "load",
+        "-t",
+        "stm32h723xx",
+        "-O",
+        "connect_mode=attach",
+        "--format",
+        "hex",
+        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.hex"
+      ],
+      "dependsOn": "Keil: Build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash only: PowerDebugger (pyOCD)",
+      "detail": "不编译，直接把已有 project.hex 烧进芯片",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "load",
+        "-t",
+        "stm32h723xx",
+        "-O",
+        "connect_mode=attach",
+        "--format",
+        "hex",
+        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.hex"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash: PowerDebugger (axf)",
+      "detail": "烧录 .axf（带调试符号）",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "load",
+        "-t",
+        "stm32h723xx",
+        "-O",
+        "connect_mode=attach",
+        "--format",
+        "elf",
+        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Erase: PowerDebugger (chip)",
+      "detail": "整片擦除 STM32H723 内部 Flash",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "erase",
+        "-t",
+        "stm32h723xx",
+        "-O",
+        "connect_mode=attach",
+        "--chip"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Reset: PowerDebugger",
+      "detail": "复位目标板并运行",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "reset",
+        "-t",
+        "stm32h723xx",
+        "-O",
+        "connect_mode=attach",
+        "-O",
+        "reset_type=sysresetreq"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Probe: 列出调试器",
+      "detail": "检查 PowerDebugger 是否被 pyOCD 识别",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "list"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Live Watch: ArmData (运行中看数据)",
+      "detail": "程序全速运行、不停机不打断，通过 SWD 以 ~20Hz 采样 ArmData 并刷新表格（先关掉调试会话，探针同一时刻只能被一个进程占用）",
+      "type": "process",
+      "command": "${env:PYTHON}",
+      "args": [
+        "${workspaceFolder}/.vscode/live_watch.py",
+        "--elf",
+        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "--rate",
+        "20"
+      ],
+      "options": {
+        "env": {
+          "PYTHONIOENCODING": "utf-8",
+          "PYTHONUTF8": "1",
+          "ARM_TOOLCHAIN_PATH": "${env:ARM_TOOLCHAIN_PATH}"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Live Watch: ArmData (同时存 CSV)",
+      "detail": "同上，并把每个采样点写入 armdata_log.csv（可用 Excel/Python 画曲线）",
+      "type": "process",
+      "command": "${env:PYTHON}",
+      "args": [
+        "${workspaceFolder}/.vscode/live_watch.py",
+        "--elf",
+        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "--rate",
+        "50",
+        "--csv",
+        "${workspaceFolder}/armdata_log.csv"
+      ],
+      "options": {
+        "env": {
+          "PYTHONIOENCODING": "utf-8",
+          "PYTHONUTF8": "1",
+          "ARM_TOOLCHAIN_PATH": "${env:ARM_TOOLCHAIN_PATH}"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash: ST-Link (hex)",
+      "type": "process",
+      "command": "${env:CUBE_PROG}",
+      "args": [
+        "-c",
+        "port=SWD",
+        "mode=UR",
+        "-w",
+        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.hex",
+        "-v",
+        "-rst"
+      ],
+      "dependsOn": "Keil: Build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash: ST-Link (elf, debug info)",
+      "type": "process",
+      "command": "${env:CUBE_PROG}",
+      "args": [
+        "-c",
+        "port=SWD",
+        "mode=UR",
+        "-w",
+        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "-v",
+        "-rst"
+      ],
+      "dependsOn": "Keil: Build",
+      "problemMatcher": []
+    },
+    {
+      "label": "CMake: Build (Debug)",
+      "detail": "用 arm-none-eabi-gcc + Ninja 编译 CMake 工程，产物 build/Debug/S27_TEST_2.elf|hex|bin（脚本会自动定位 CubeIDE 自带的 gcc/ninja/cmake）",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\cmake\\build.ps1",
+        "Debug"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "CMake: Build (Release)",
+      "detail": "同上，Release 配置（-Os）。产物在 build/Release/",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\cmake\\build.ps1",
+        "Release"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash: CMake 产物 (pyOCD)",
+      "detail": "先用 GCC 编译 CMake 工程，再用 PowerDebugger 烧录 build/Debug/S27_TEST_2.elf",
+      "type": "process",
+      "command": "${env:PYOCD}",
+      "args": [
+        "load",
+        "-t",
+        "stm32h723xx",
+        "-O",
+        "connect_mode=attach",
+        "--format",
+        "elf",
+        "${workspaceFolder}/build/Debug/S27_TEST_2.elf"
+      ],
+      "dependsOn": "CMake: Build (Debug)",
+      "problemMatcher": []
+    },
+    {
+      "label": "Linux: Rebuild (Debug)",
+      "detail": "全量编译整个工程，显示编译命令、错误/警告总数及诊断位置",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/cmake/build.sh",
+        "Debug",
+        "--clean-first"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true,
+        "revealProblems": "onProblem"
+      },
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "owner": "s27-gcc",
+          "source": "ARM GCC",
+          "fileLocation": "absolute",
+          "applyTo": "allDocuments"
+        }
+      ]
+    },
+    {
+      "label": "Linux: Setup Debug Tools",
+      "detail": "安装 pyOCD / Cortex-Debug 并配置本机 GDB 路径（需要联网）",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/tools/setup-linux-debug.sh"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Linux: Check Debug Tools",
+      "detail": "检查 ARM GDB、pyOCD 和 Cortex-Debug，不连接开发板",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/tools/setup-linux-debug.sh",
+        "--check"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Linux: Probe (PowerDebugger)",
+      "detail": "检查 PowerDebugger 的 USB 可见性、当前用户权限和 pyOCD 识别结果",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/tools/check-powerdebugger.py",
+        "--pyocd",
+        "${config:cortex-debug.pyocdPath}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Linux: Flash (Debug, pyOCD)",
+      "detail": "在同一终端依次显示工具检查、编译和烧录；找不到探针时立即报错",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/tools/flash-linux-debug.sh",
+        "${config:cortex-debug.pyocdPath}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true,
+        "clear": true,
+        "revealProblems": "never"
+      },
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "owner": "s27-gcc",
+          "source": "ARM GCC",
+          "fileLocation": "absolute",
+          "applyTo": "allDocuments"
+        }
+      ],
+      "isBackground": false
+    }
+  ]
+}
