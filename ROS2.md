@@ -25,4 +25,5 @@ cd ARM_ROS
 ## 本仓库（电控）的文档
 
 - `README.md` — 项目简介
-- `APP/INTEGRATION_CN.md` — 应用层集成说明
+- `PC_MODE.md` — PC 模式三阶段接管说明
+- `工程代码导读与接手指南.md` — 代码结构与接手流程

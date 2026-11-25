@@ -151,7 +151,7 @@ def main():
         print("\n下一步:")
         print("  1. 运行编译测试: cd tools/selftest && python armclang_check.py")
         print("  2. 运行单元测试: python run_selftest.py && python run_control_selftest.py")
-        print("  3. 如果测试通过，运行提交脚本: ./commit_p0_p1_p2.sh")
+        print("  3. 如果测试通过，用 git status 检查改动再手动提交")
         return 0
     else:
         print(f"✗ {failed} 个检查失败")
