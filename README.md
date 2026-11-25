@@ -124,6 +124,7 @@ ROS 2 侧代码已独立到 `aojoe-Q/ARM_ROS` 仓库，本仓库的 `ROS2.md` �
 
 | 日期 | 提交 | 改了什么 |
 |---|---|---|
+| 2026-11-25 | `dd045cd` | **散列文件改名 + 注释修复**：Keil 工程模板 `COD_H7_Template` → `ATS_H7_Template`，`project.uvprojx` 的 ScatterFile 同步；修复 10 个源文件里被破坏成 U+FFFD 的中文注释；`DM_motor.h` 量程放宽（KP_MAX 700 / KD_MAX 10）并删掉未引用的第二套宏；`Arm_L_task.c` J3 斜坡 0.0035→0.0015；新增 `.editorconfig`、`.clangd`、工程代码导读。**需 Rebuild**（散列文件路径变了）。
 | 2026-11-22 | - | **按系统选择默认入口**：统一 Ctrl+Shift+B 和 F5，使用 VS Code 系统覆盖配置在 Linux 上调用 GCC/Make、在 Windows 上调用 Keil；IntelliSense 使用原生 Linux/Win32 自动配置名。保留各工具链的手动入口，本机路径继续由对应系统的配置脚本生成。 |
 | 2026-11-22 | - | **PowerDebugger 访问诊断**：补充 `303a:40ff` 的 USB/HID udev 权限规则和探针检查脚本；F5 在编译、烧录前检查设备节点及用户权限，区分未连接、节点不可见、权限不足和 pyOCD 未识别。规则需在本机安装后拔插 USB 生效。 |
 | 2026-11-22 | - | **F5 前置任务等待修正**：检查、编译、烧录改为一个前台脚本并显示阶段进度；烧录和 GDB Server 增加 `--no-wait`，无探针时立即失败；检查命令增加时限，烧录输出保存到 `flash.log`。已验证失败退出，实际板端调试待验证。 |
