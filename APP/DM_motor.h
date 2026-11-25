@@ -39,28 +39,17 @@
 #define KP_MIN 0.0f
 #endif
 #ifndef KP_MAX
-#define KP_MAX 500.0f
+#define KP_MAX 700.0f
 #endif
 #ifndef KD_MIN
 #define KD_MIN 0.0f
 #endif
 #ifndef KD_MAX
-#define KD_MAX 5.0f
+#define KD_MAX 10.0f
 #endif
 #define T_MIN_DM -10.0f
 #define T_MAX_DM 10.0f
 
-/* 第二套量程（*2 后缀）：当前全工程未引用，保留供不同型号参数对照。 */
-#define P_MIN2 -12.5f
-#define P_MAX2 12.5f
-#define V_MIN2 -45.0f
-#define V_MAX2 45.0f
-#define KP_MIN2 0.0f
-#define KP_MAX2 500.0f
-#define KD_MIN2 0.0f
-#define KD_MAX2 5.0f
-#define T_MIN2 -10.0f
-#define T_MAX2 10.0f
 
 /* motor_fbpara_t: DM 反馈解码结果。
  * id/state 来自 D0；p_int/v_int/t_int 为未解码原始值；pos/vel/tor 为物理量；

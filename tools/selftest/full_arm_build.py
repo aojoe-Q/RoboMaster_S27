@@ -1,6 +1,6 @@
 """Clean compile/link with recorded Keil flags; never flashes or opens the IDE.
 
-Requires MDK-ARM/COD_H7_Template/project_project.dep and project.lnp from Keil.
+Requires MDK-ARM/ATS_H7_Template/project_project.dep and project.lnp from Keil.
 All objects, linker outputs and logs go under tools/selftest/build/full_arm.
 """
 from concurrent.futures import ThreadPoolExecutor
@@ -15,10 +15,10 @@ MDK = ROOT / "MDK-ARM"
 OUT = ROOT / "tools/selftest/build/full_arm"
 BIN = Path(os.environ.get("ARMCLANG_BIN", r"E:\keil5\ARM\ARMCLANG\bin"))
 OUT.mkdir(parents=True, exist_ok=True)
-dep = (MDK / "COD_H7_Template/project_project.dep").read_text(encoding="latin1")
+dep = (MDK / "ATS_H7_Template/project_project.dep").read_text(encoding="latin1")
 entries = re.findall(r"^F \(([^)]+)\)\([^)]*\)\((.*?)\)(?=\r?\n)", dep, re.M | re.S)
 sources = [(src, flags) for src, flags in entries if Path(src).suffix.lower() in (".c", ".s")]
-link = (MDK / "COD_H7_Template/project.lnp").read_text()
+link = (MDK / "ATS_H7_Template/project.lnp").read_text()
 objects = {}
 
 

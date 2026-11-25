@@ -15,7 +15,7 @@ MDK = r"C:\Users\lenovo\Desktop\S27_TEST_2\MDK-ARM"
 CC = r"E:\keil5\ARM\ARMCLANG\bin\armclang.exe"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build", "armclang_obj")
 
-dep = open(os.path.join(MDK, "COD_H7_Template", "project_project.dep"), encoding="latin-1", newline="").read()
+dep = open(os.path.join(MDK, "ATS_H7_Template", "project_project.dep"), encoding="latin-1", newline="").read()
 line = [l for l in dep.split("\n") if l.startswith("F (..\\APP\\Arm_L_task.c)")][0].rstrip("\r")
 flags = line[line.index(")(-xc") + 2: line.rindex(")")]
 flags = (flags.replace("ARM_MATH_CHECK-o", "ARM_MATH_CHECK -o")
@@ -59,7 +59,7 @@ os.makedirs(OUT, exist_ok=True)
 # Prepare build record
 build_record = {
     "timestamp": datetime.now().isoformat(),
-    "dep_file": os.path.join(MDK, "COD_H7_Template", "project_project.dep"),
+    "dep_file": os.path.join(MDK, "ATS_H7_Template", "project_project.dep"),
     "compiler": CC,
     "flags": " ".join(args),
     "excluded_files": excluded,

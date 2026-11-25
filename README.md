@@ -18,7 +18,7 @@
 | `SystemView/` | SEGGER RTT 调试组件 |
 | `Middlewares/` | FreeRTOS、STM32 USB Device、ARM DSP |
 | `Drivers/` | ST HAL 与 CMSIS |
-| `MDK-ARM/` | Keil 工程 `project.uvprojx`、armasm 启动文件、散列文件 `COD_H7_Template.sct` |
+| `MDK-ARM/` | Keil 工程 `project.uvprojx`、armasm 启动文件、散列文件 `ATS_H7_Template.sct` |
 | `Core/Startup/` | GCC 版启动文件（给 CMake 构建用，与 `MDK-ARM/` 那份并存） |
 | `cmake/` | 交叉编译工具链文件、`build.ps1` / `build.sh` 一键脚本、构建说明 |
 | `tools/selftest/` | 主机侧回归自测（不需要硬件） |
@@ -82,7 +82,7 @@ Windows 产物在 `build/Debug/`；Linux 产物在 `build/Linux-Debug/`。两者
 1. **VS Code（Windows）**：运行任务 `Keil: Build`，走 `MDK-ARM/build.cmd` → `UV4.exe -b`，只编译不烧录。
 2. **Keil 界面**：打开 `MDK-ARM/project.uvprojx`，F7 编译。
 
-> 两套构建各自独立：CMake 用 `Core/Startup/startup_stm32h723xx.s`（GCC 语法）+ `STM32H723VGTX_FLASH.ld`；Keil 用 `MDK-ARM/startup_stm32h723xx.s`（armasm）+ `COD_H7_Template.sct`。**加/删源文件时两边都要改**。
+> 两套构建各自独立：CMake 用 `Core/Startup/startup_stm32h723xx.s`（GCC 语法）+ `STM32H723VGTX_FLASH.ld`；Keil 用 `MDK-ARM/startup_stm32h723xx.s`（armasm）+ `ATS_H7_Template.sct`。**加/删源文件时两边都要改**。
 > 改了 `.uvprojx`、启动文件或散列文件后，Keil 要**关掉重开**并 Rebuild 全量，增量编译会用到旧 `.o`。
 
 烧录用 pyOCD 或 STM32CubeProgrammer，配置见 `.vscode/tasks.json`（`Flash: CMake 产物` 那条走 pyOCD 烧 `build/Debug/S27_TEST_2.elf`）。
@@ -144,13 +144,13 @@ ROS 2 侧代码已独立到 `aojoe-Q/ARM_ROS` 仓库，本仓库的 `ROS2.md` �
 | 2026-11-17 | `62fce24` | **P0/P1/P2 修复**：UART DMA 双缓冲长度去掉多余的 `*2`（SBUS 18 / 图传 39 / 裁判帧长）；`Image_Transmission_Info_Update` 增加 Size 参数并补帧长校验；修遥控超时竞态；DMA 段由 `.AXI_SRAM` 改为 `.AXI_SRAM_DMA`（散列文件同步）；注释掉 `Control_Task` / `INS_Task` 释放 4096 字节栈；`Arm_R_task` 移入 `archive/`。 |
 | 2026-11-10 | `84f7efc` | 网页上新建 README（5 行简介）。 |
 | 2026-11-08 | `2b6bcbf` | **有注释电机使能校验**：新增输出层 `APP/arm_output.h`（250 Hz 发布、`EN_WAIT_BOOT`/`EN_SEND`/`EN_OK`/`EN_FAIL` 状态机、反馈 200 ms 超时），控制层只发布快照不再直接使能；夹爪标零增加“动过 + 顶死 + 仍使能”校验。 |
-| 2026-11-07 | `d013e70` | 机械臂夹爪：新增堵转标零（纯力矩顶死点后 `save_motor_zero`）与力矩控制，`Arm_L_task` 流程调整；新增散列文件 `COD_H7_Template.sct`（Sector 6/7 留给掉电存储）。 |
+| 2026-11-07 | `d013e70` | 机械臂夹爪：新增堵转标零（纯力矩顶死点后 `save_motor_zero`）与力矩控制，`Arm_L_task` 流程调整；新增散列文件 `ATS_H7_Template.sct`（Sector 6/7 留给掉电存储）。 |
 | 2026-11-04 | `0aaf33e` | 新增 USB 通信开发线：`arm_usb_protocol`、`Arm_USB_task`、`ring_buffer`（原在独立分支 `usb-comm`）。 |
 | 2026-11-04 | `df6801c` | 同步桌面最新代码：机械臂任务、电机任务、遥控器、`gpio.c` 更新；Keil 工程改名 `S27.uvprojx` → `project.uvprojx`。 |
 | 2026-11-04 | `9d77343` | 初始提交：STM32H723VGT6 电控工程，301 个文件，`.gitignore` 排除全部 Keil 编译产物。 |
 
 ## 已知问题
 
-- `STM32H723VGTX_FLASH.ld` 目前 FLASH 区按整 1 MB 分配。若日后把「多圈掉电存储与恢复」分支合进 `main`，必须把 Sector 6/7（从 `0x080C0000` 起的 256 KB）从 FLASH 区排除，否则掉电保存的数据会被固件覆盖；Keil 那边的 `COD_H7_Template.sct` 已经是这么做的。
+- `STM32H723VGTX_FLASH.ld` 目前 FLASH 区按整 1 MB 分配。若日后把「多圈掉电存储与恢复」分支合进 `main`，必须把 Sector 6/7（从 `0x080C0000` 起的 256 KB）从 FLASH 区排除，否则掉电保存的数据会被固件覆盖；Keil 那边的 `ATS_H7_Template.sct` 已经是这么做的。
 - `APP/Arm_L_task.c:1202` 有一行 GBK 双重编码乱码注释（`d013e70` 引入），全工程仅此一处，不影响编译。
 - `LICENSE` 在 `5f524cb` 清理文档时被删，需要时用 `git checkout 62fce24 -- LICENSE` 取回。

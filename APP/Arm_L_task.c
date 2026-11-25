@@ -972,7 +972,7 @@ void TAKE_pose_1(void)
 
 //	Grip_send_set = grip_zero_position;
 
-	J1_ramp= 0.0090,J2_ramp= 0.002,J3_ramp= 0.0035,J4_ramp= 0.0032,J5_ramp= 0.002,J6_ramp= 0.015,Grip_ramp= 0.030;  //锟斤拷锟斤拷锟斤拷
+	J1_ramp= 0.0090,J2_ramp= 0.002,J3_ramp= 0.0035,J4_ramp= 0.0032,J5_ramp= 0.002,J6_ramp= 0.015,Grip_ramp= 0.030;  // 各关节预设目标的斜坡步长。
 
 
 	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
@@ -991,7 +991,7 @@ void TAKE_pose_1(void)
 	arm_ramp_calc(&J6_L_position_set,J6_ramp,J6_send_set);
 	arm_ramp_calc(&grip_L_position_set,Grip_ramp,Grip_send_set);
 
-	/*���λ�ø�ֵ*/
+	/* 将预设目标位置写入各关节。 */
 	ArmData.J1.send_set = J1_L_position_set.out;
 	ArmData.J2.send_set = J2_L_position_set.out;
 	ArmData.J3.send_set = J3_L_position_set.out;
@@ -1022,7 +1022,7 @@ void TAKE_pose_2(void)
 
 //	Grip_send_set = grip_zero_position;
 
-	J1_ramp= 0.0090,J2_ramp= 0.002,J3_ramp= 0.0035,J4_ramp= 0.0032,J5_ramp= 0.002,J6_ramp= 0.015,Grip_ramp= 0.030;  //锟斤拷锟斤拷锟斤拷
+	J1_ramp= 0.0090,J2_ramp= 0.002,J3_ramp= 0.0035,J4_ramp= 0.0032,J5_ramp= 0.002,J6_ramp= 0.015,Grip_ramp= 0.030;  // 各关节预设目标的斜坡步长。
 
 
 	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
@@ -1041,7 +1041,7 @@ void TAKE_pose_2(void)
 	arm_ramp_calc(&J6_L_position_set,J6_ramp,J6_send_set);
 	arm_ramp_calc(&grip_L_position_set,Grip_ramp,Grip_send_set);
 
-	/*���λ�ø�ֵ*/
+	/* 将预设目标位置写入各关节。 */
 	ArmData.J1.send_set = J1_L_position_set.out;
 	ArmData.J2.send_set = J2_L_position_set.out;
 	ArmData.J3.send_set = J3_L_position_set.out;
@@ -1072,7 +1072,7 @@ void ARM_reset(void)
 
 //	Grip_send_set = grip_zero_position;
 
-	J1_ramp= 0.0090,J2_ramp= 0.002,J3_ramp= 0.0035,J4_ramp= 0.0032,J5_ramp= 0.002,J6_ramp= 0.015,Grip_ramp= 0.030;  
+	J1_ramp= 0.0090,J2_ramp= 0.002,J3_ramp= 0.0015,J4_ramp= 0.0032,J5_ramp= 0.002,J6_ramp= 0.015,Grip_ramp= 0.030;  
 
 
 	limitPosition(&J1_send_set,J1_Max_position,J1_Min_position);
@@ -1199,7 +1199,7 @@ void Arm_PC_Control(void)
         return;
     }
 
-	/* 璁剧疆姝ｅ父 PID 澧炵泭锛堝弬鏁颁笉鍙橈級 */
+	/* 设置正常 PID 增益。 */
 	ArmData.J1.Kp = J1_PID_KP; ArmData.J1.Kd = J1_PID_KD; // 每拍重写 PD 增益：保证从其他模式切回后增益正确
 	ArmData.J2.Kp = J2_PID_KP; ArmData.J2.Kd = J2_PID_KD;
 	ArmData.J3.Kp = J3_PID_KP; ArmData.J3.Kd = J3_PID_KD;
@@ -1273,7 +1273,7 @@ void Arm_PC_Control(void)
 	grip_L_position_set.out = ArmData.Grip.send_set;
 }
 
-/*************************************遥锟斤拷锟斤拷锟斤拷锟斤拷*******************************************/
+/************************************* 遥控器控制模式 *************************************/
 
 /* Arm_L_Movement_J1_J4() —— 遥控模式下的主力程
  * 输入：VT13 遥控器通道 0..3（先经 rc_deadband_limit 去死区）
@@ -1286,14 +1286,14 @@ void Arm_PC_Control(void)
 void ARM_rc(void)
 {
 	int16_t channel_0,channel_1,channel_2,channel_3;
-	/*锟斤拷取遥锟斤拷锟斤拷通锟斤拷锟斤拷锟诫，应锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷*/
+	/* 读取遥控通道并应用死区。 */
 /* 四个通道先过 ±10 的死区，避免摇杆回中抖动被累加进目标。 */
 	rc_deadband_limit(RCData.rc.ch[0],channel_0,10);
 	rc_deadband_limit(RCData.rc.ch[1],channel_1,10);
 	rc_deadband_limit(RCData.rc.ch[2],channel_2,10);
 	rc_deadband_limit(RCData.rc.ch[3],channel_3,10);
 /* 每个控制周期都重写 PD 增益（数值是常量，确保从其他模式切回后仍正确）。 */
-	/*锟斤拷锟斤拷锟斤拷PD锟斤拷值*/
+	/* 设置各关节的 PD 增益。 */
 	ArmData.J1.Kp = J1_PID_KP;ArmData.J1.Kd = J1_PID_KD;
 	ArmData.J2.Kp = J2_PID_KP;ArmData.J2.Kd = J2_PID_KD;
 	ArmData.J3.Kp = J3_PID_KP;ArmData.J3.Kd = J3_PID_KD;
@@ -1317,7 +1317,7 @@ void ARM_rc(void)
 	              Grip_Min_position - ArmData.Grip.Initial_Total_position - ArmData.Grip.Key_Control_Value);
 
 	
-	/*锟斤拷锟酵革拷MIT锟斤拷锟斤拷模式锟铰的猴拷锟斤拷锟斤拷位锟斤拷*/
+	/* 根据遥控累加量和自定义控制器输入生成目标位置。 */
 /* 目标位置 = 零点偏置 + 遥控累加值（J5/J6 再叠加自定义控制器微调）。 */
 	J1_set_initial_data = ArmData.J1.Initial_Total_position + ArmData.J1.RC_Sum_Value;
 	J2_set_initial_data = ArmData.J2.Initial_Total_position + ArmData.J2.RC_Sum_Value;
@@ -1335,7 +1335,7 @@ void ARM_rc(void)
 	J6_send_set = ArmData.J6.Initial_Total_position + ArmData.J6.RC_Sum_Value + Custom_RC[5].DM_CC_receive + ArmData.J6.Key_Control_Value;
 	Grip_send_set = ArmData.Grip.Initial_Total_position + ArmData.Grip.RC_Sum_Value + ArmData.Grip.Key_Control_Value;
 	
-	/*���λ�ø�ֵ*/
+	/* 将限幅后的目标位置写回各关节。 */
 /* 把本拍目标写回 ArmData，供 Arm_Publish() 组装 MIT 帧下发。 */
 	ArmData.J1.send_set = J1_send_set;
 	ArmData.J2.send_set = J2_send_set;
@@ -1354,7 +1354,7 @@ void ARM_rc(void)
 	J6_L_position_set.out = ArmData.J6.position;
 	/* 夹爪不同步斜坡：本模式夹爪要走自己的斜坡，见函数末尾 arm_ramp_calc */
 
-//	Arm_Key_Control_mode();  //�������
+//	Arm_Key_Control_mode();  // 历史按键控制分支，当前未启用。
 	
 /* 增量限位：把 RC_Sum_Value 限制在“基准位置 ± 行程”范围内。 */
 	limitPosition(&ArmData.J1.RC_Sum_Value,J1_Max_position - ArmData.J1.Initial_Total_position,J1_Min_position - ArmData.J1.Initial_Total_position);
@@ -1479,7 +1479,7 @@ void Arm_return_initial_position(void)
 		limitPosition(&ArmData.J6.send_set,J6_Max_position,J6_Min_position);
 		limitPosition(&ArmData.Grip.send_set,Grip_Max_position,Grip_Min_position);
 
-		//�ж��Ƿ�ص���ʼ��̬
+		// 判断机械臂是否回到初始姿态。
 /* 7 轴斜坡输出全部等于零点即认为到位。 */
 		if(J1_L_position_set.out == J1_zero_position && J2_L_position_set.out == J2_zero_position && J3_L_position_set.out == J3_zero_position && J4_L_position_set.out == J4_zero_position && J5_L_position_set.out == J5_zero_position && J6_L_position_set.out == J6_zero_position && grip_L_position_set.out == grip_zero_position)
 		{
@@ -1496,7 +1496,7 @@ void Chassis_Movement(void)
 	
 }
 
-/*  锟斤拷位锟斤拷锟斤拷  */
+/* 位置限幅函数。 */
 /* limitPosition() —— 单值硬限位钳制
  * 参数：position      待钳位目标指针（就地修改）
  *       max_position  上限(rad)
@@ -1509,11 +1509,11 @@ void limitPosition(fp32* position, fp32 max_position, fp32 min_position)
 {
     if (*position >= max_position)  // 超上限：直接截断（无减速包络）
     {
-        *position = max_position;  // ����������ֵ�����������ֵ
+        *position = max_position;  // 目标超过最大值时限制到上限。
     } 
     else if (*position <= min_position)  // 超下限
     {
-        *position = min_position;  // ���������Сֵ����������Сֵ
+        *position = min_position;  // 目标低于最小值时限制到下限。
     }
 }
 

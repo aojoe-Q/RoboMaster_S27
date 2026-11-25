@@ -17,7 +17,6 @@ LR_IROM1 0x08000000 0x00100000  {    ; load region size_region
   }
   ; ---- AXI SRAM 128 KiB: DMA buffers with explicit section placement (32-byte aligned) ----
   RW_IRAM2 0x24000000 0x00020000  {
-   *(.AXI_SRAM)
    *(.AXI_SRAM_DMA)  ; DMA缓冲区的显式section，保证对齐和位置
    .ANY (+RW +ZI)
   }

@@ -96,13 +96,13 @@ typedef enum
 #define KP_MIN  (0.0f)
 #endif
 #ifndef KP_MAX
-#define KP_MAX  (500.0f) // 0..500
+#define KP_MAX  (700.0f) // 0..700
 #endif
 #ifndef KD_MIN
 #define KD_MIN  (0.0f)
 #endif
 #ifndef KD_MAX
-#define KD_MAX  (5.0f) // 0..5
+#define KD_MAX  (10.0f) // 0..10
 #endif
 #ifndef T_MIN
 #define T_MIN   (-54.0f) // N·m

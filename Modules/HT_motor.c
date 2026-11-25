@@ -49,7 +49,7 @@ void CanComm_ControlCmd_Right(uint8_t cmd,uint32_t motor_id)
 			break;
 			
 			default:
-			return; /* ֱ���˳����� */
+			return; /* 直接返回。 */
     }
     CanTransmit_Right(buf,8,motor_id);
 }

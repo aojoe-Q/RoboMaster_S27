@@ -131,11 +131,11 @@ DM_Motor_Info_Typedef DM_8009_Motor[4]= {
 //------------------------------------------------------------------------------
 
 /**
-  * @brief  ±àÂëÆ÷Öµ×ª»¯Îª½Ç¶È(ÀÛ¼Ó ×îµ½µ½float×î´óÖµ)
+  * @brief  ç¼–ç å™¨å€¼è½¬åŒ–ä¸ºè§’åº¦(ç´¯åŠ  æœ€åˆ°åˆ°floatæœ€å¤§å€¼)
   */
 static float DJI_Motor_Encoder_To_Anglesum(DJI_Motor_Data_Typedef *,float ,uint16_t );
 /**
-  * @brief  ±àÂëÆ÷Öµ×ª»¯Îª½Ç¶È(·¶Î§ Õı¸º180¶È)
+  * @brief  ç¼–ç å™¨å€¼è½¬åŒ–ä¸ºè§’åº¦(èŒƒå›´ æ­£è´Ÿ180åº¦)
   */
 static float DJI_Motor_Encoder_To_Angle(DJI_Motor_Data_Typedef *,float ,uint16_t );
 
@@ -171,7 +171,7 @@ void DJI_Motor_Info_Update(uint32_t *Identifier, uint8_t *Rx_Buf,DJI_Motor_Info_
 	{
 		case DJI_GM6020:
 
-		DJI_Motor->Data.Angle = DJI_Motor_Encoder_To_Angle(&DJI_Motor->Data,1.f,8192); //6020µç»ú¼õËÙ±ÈÎª1:1 ÓµÓĞ¾ø¶ÔÎ»ÖÃ
+		DJI_Motor->Data.Angle = DJI_Motor_Encoder_To_Angle(&DJI_Motor->Data,1.f,8192); //6020ç”µæœºå‡é€Ÿæ¯”ä¸º1:1 æ‹¥æœ‰ç»å¯¹ä½ç½®
 		break;
 	
 		case DJI_M3508:
@@ -327,9 +327,9 @@ float DJI_Motor_Encoder_To_Angle(DJI_Motor_Data_Typedef *Data,float torque_ratio
 
 /**
   * @brief  Transmit enable disable save zero position Command to DM motor 
-  * @param  *FDCAN_TxFrame£ºpointer to the FDCAN_TxFrame_TypeDef.
-  * @param  *DM_Motor£ºpointer to the DM_Motor
-  * @param  CMD£ºTransmit Command  (DJI_Motor_Type_e)
+  * @param  *FDCAN_TxFrameï¼špointer to the FDCAN_TxFrame_TypeDef.
+  * @param  *DM_Motorï¼špointer to the DM_Motor
+  * @param  CMDï¼šTransmit Command  (DJI_Motor_Type_e)
   * @retval None
   */
 void DM_Motor_Command(FDCAN_TxFrame_TypeDef *FDCAN_TxFrame,DM_Motor_Info_Typedef *DM_Motor,uint8_t CMD){

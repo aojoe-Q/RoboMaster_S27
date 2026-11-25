@@ -45,6 +45,7 @@
                 "-mfpu=fpv5-d16",
                 "-mfloat-abi=hard"
             ],
+            "compileCommands": "${workspaceFolder}/build/Linux-Debug/compile_commands.json",
             "cStandard": "gnu11",
             "cppStandard": "c++17",
             "intelliSenseMode": "linux-gcc-arm",
@@ -80,8 +81,7 @@
                 ],
                 "limitSymbolsToIncludedHeaders": true,
                 "databaseFilename": "${workspaceFolder}/.vscode/browse.vc.db"
-            },
-            "compileCommands": "${workspaceFolder}/build/Linux-Debug/compile_commands.json"
+            }
         },
         {
             "name": "Win32",
@@ -126,6 +126,7 @@
                 "--target=arm-arm-none-eabi",
                 "-mcpu=cortex-m7"
             ],
+            "compileCommands": "${workspaceFolder}/build/Debug/compile_commands.json",
             "cStandard": "c11",
             "cppStandard": "c++17",
             "intelliSenseMode": "windows-clang-arm",

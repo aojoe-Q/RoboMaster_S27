@@ -20,7 +20,7 @@ Write-Host '[2/3] Building Keil firmware...'
 & (Join-Path $projectRoot 'MDK-ARM\build.cmd') -b
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$hexFile = Join-Path $projectRoot 'MDK-ARM\COD_H7_Template\project.hex'
+$hexFile = Join-Path $projectRoot 'MDK-ARM\ATS_H7_Template\project.hex'
 if (-not (Test-Path -LiteralPath $hexFile -PathType Leaf)) {
     throw "Build completed without a HEX file: $hexFile"
 }

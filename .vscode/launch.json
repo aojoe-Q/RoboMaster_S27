@@ -39,7 +39,7 @@
         "serverpath": "${env:PYOCD}",
         "gdbPath": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",
         "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
-        "executable": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf"
+        "executable": "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.axf"
       }
     },
     {
@@ -56,7 +56,6 @@
         "--no-wait"
       ],
       "overrideGDBServerStartedRegex": "GDB server listening on port",
-      "targetId": "stm32h723xx",
       "device": "STM32H723VG",
       "interface": "swd",
       "cwd": "${workspaceFolder}",
@@ -74,11 +73,14 @@
       "overrideAttachCommands": [
         "interpreter-exec console \"set mem inaccessible-by-default off\""
       ],
+      "linux": {
+        "targetId": "stm32h723xx"
+      },
       "windows": {
         "serverpath": "${env:PYOCD}",
         "gdbPath": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",
         "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
-        "executable": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "executable": "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.axf",
         "preLaunchTask": ""
       }
     },
@@ -95,9 +97,9 @@
         "reset_type=sysresetreq"
       ],
       "overrideGDBServerStartedRegex": "GDB server listening on port",
-      "targetId": "stm32h723xx",
       "cwd": "${workspaceFolder}",
-      "executable": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+      "executable": "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.axf",
+      "targetId": "stm32h723xx",
       "device": "STM32H723VG",
       "interface": "swd",
       "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
@@ -127,9 +129,9 @@
         "reset_type=sysresetreq"
       ],
       "overrideGDBServerStartedRegex": "GDB server listening on port",
-      "targetId": "stm32h723xx",
       "cwd": "${workspaceFolder}",
       "executable": "${workspaceFolder}/build/Debug/S27_TEST_2.elf",
+      "targetId": "stm32h723xx",
       "device": "STM32H723VG",
       "interface": "swd",
       "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
@@ -159,9 +161,8 @@
         "reset_type=sysresetreq"
       ],
       "overrideGDBServerStartedRegex": "GDB server listening on port",
-      "targetId": "stm32h723xx",
       "cwd": "${workspaceFolder}",
-      "executable": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+      "executable": "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.axf",
       "device": "STM32H723VG",
       "interface": "swd",
       "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
@@ -173,7 +174,10 @@
         "enabled": true,
         "samplesPerSecond": 4
       },
-      "showDevDebugOutput": "none"
+      "showDevDebugOutput": "none",
+      "linux": {
+        "targetId": "stm32h723xx"
+      }
     },
     {
       "type": "cortex-debug",
@@ -182,7 +186,7 @@
       "servertype": "stlink",
       "serverpath": "${env:STLINK_GDB}",
       "cwd": "${workspaceFolder}",
-      "executable": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+      "executable": "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.axf",
       "device": "STM32H723VG",
       "interface": "swd",
       "armToolchainPath": "${env:ARM_TOOLCHAIN_PATH}",
@@ -197,7 +201,7 @@
       "name": "Debug: ST-Link (STM32Cube 扩展, 需 ST-Link 硬件)",
       "origin": "manual",
       "cwd": "${workspaceFolder}",
-      "program": "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+      "program": "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.axf",
       "deviceName": "STM32H723VGTx",
       "deviceCore": "Cortex-M7",
       "gdb": "${env:ARM_TOOLCHAIN_PATH}/arm-none-eabi-gdb.exe",

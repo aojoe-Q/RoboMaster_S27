@@ -1,6 +1,6 @@
 /*
  * Linker script for STM32H723VGTx (1024K FLASH / 128K DTCM / 128K AXI SRAM)
- * 由 MDK-ARM\COD_H7_Template\COD_H7_Template.sct 翻译而来，供 arm-none-eabi-gcc 使用。
+ * 由 MDK-ARM\ATS_H7_Template\ATS_H7_Template.sct 翻译而来，供 arm-none-eabi-gcc 使用。
  *
  * 内存划分（与原 Keil 工程保持一致）：
  *   FLASH   0x08000000 1024K  代码 + 常量 + .data/.axi_data 的初值

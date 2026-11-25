@@ -6,11 +6,11 @@
   * @history
   *  Version    Date            Author          Modification
   *  V1.0.0     2023-7-11       Penguin         1. done
-  *  V1.0.1     Oct-31-2023     LihanChen       1. ��ɺ��Ŀ�ܵĹ�����ʹ�������ģʽ�� miniPC ģʽ���ݡ�
-  *  V1.0.2     Nov-01-2023     LihanChen       1. �� Append_CRC16_Check_Sum_SendPacketVision() �� Append_CRC-16_Check_Stum_OutputPCData() �ϲ��� Append_CRC16_Check_Sum() ��
-  *  v2.0.0     Feb-24-2024     LihanChen       1. �ع����룬�� usb_task �ķ��ͺͽ��շ��룬��ʵ�ְַ����ͺͽ����Ӿ��͵�������
-  *  v2.0.1     Mar-02-2024     LihanChen       1. ɾ��δʹ�õ� USB_RECEIVE_STATE ���壬ȥ�����뾯��
-  *  v2.1.0     Mar-04-2024     LihanChen       1. ���Ӳ���ϵͳ��Ϣת���������ӿڣ���������ʵ��ֵ��
+  *  V1.0.1     Oct-31-2023     LihanChen       1. 调整迷你主机模式下的数据处理。
+  *  V1.0.2     Nov-01-2023     LihanChen       1. 合并 CRC16 数据发送校验接口。
+  *  v2.0.0     Feb-24-2024     LihanChen       1. 重构 USB 任务收发流程，拆分视觉与自定义控制器数据处理。
+  *  v2.0.1     Mar-02-2024     LihanChen       1. 删除未使用的 USB_RECEIVE_STATE 定义。
+  *  v2.1.0     Mar-04-2024     LihanChen       1. 增加裁判系统信息转发接口并更新反馈数据。
   @verbatim
   =================================================================================
 
@@ -50,8 +50,8 @@ Custom_controller_t Custom_RC[6];
 uint8_t Custom_RC_Key1;
 uint8_t Custom_RC_Key2;
 /**
-  * @brief      USB������������switch��Ϊ���ͣ����ղ�����usb_receive()�д���
-  * @param[in]  argument: �������
+  * @brief      解析串口输入并更新自定义控制器数据。
+  * @param[in]  argument: 未使用的 FreeRTOS 任务参数。
   * @retval     None
   */
 	
@@ -66,12 +66,12 @@ void referee_usart_Task(void const * argument)
     usb_receive();
 	Custom_RC_data();
 		
-    osDelay(10); // Ϊ�˼�����λ���������ݵĸ��������ͷ���Ƶ�ʡ� Delay for 6.67 milliseconds (150Hz)
+    osDelay(10); // 每 10 ms 轮询一次，约 100 Hz。
   }
 }
 
 /**
-  * @brief      USB�������������������յ���ԭʼ���ݣ���������ͷ�ж��������Ͳ��ְ�����
+  * @brief      接收包装函数：调用 FIFO 解包器处理输入数据。
   * @param      None
   * @retval     None
   */
@@ -93,7 +93,7 @@ static void usb_receive(void)
   * @retval         none
   */
 /**
-  * @brief          ���ֽڽ��
+  * @brief          逐字节解包函数。
   * @param[in]      void
   * @retval         none
   */
@@ -105,16 +105,16 @@ extern uint8_t uart1_rx_process_buf[512];
 void referee_unpack_fifo_data(void)
 {
   // 固定遍历 128 字节（= REF_PROTOCOL_FRAME_MAX_SIZE）；真实 DMA 接收长度在此被忽略，属历史写法。
-  uint32_t len = 128;  // �����ж�����ճ���
+  uint32_t len = 128;  // 遗留实现固定扫描 128 字节缓冲区。
 
   unpack_data_t *p_obj = &referee_unpack_obj;
  // 说明：DC_Receive_HS（USB CDC 读取）已停用，改用 UART1 DMA 缓冲。
  //DC_Receive_HS(usb_rx_buf, &len); // Read data into the buffer
-  // ��USB��ȡ����
+  // USB CDC 接收已停用，当前使用 UART1 DMA 缓冲区。
   // if (1) 为恒真分支：保留旧代码结构，便于将来切回 USB 通路。
   if (1)
   {
-    // ����ֽڴ���������ԭ��״̬���߼���
+    // 逐字节处理输入数据并推进帧解析状态机。
     for (int i = 0; i < len; i++)
     {
       uint8_t byte = uart1_rx_process_buf[i];
@@ -220,9 +220,9 @@ if ( verify_CRC16_check_sum(p_obj->protocol_packet, REF_HEADER_CRC_CMDID_LEN + p
 
 
 /**
-  * @brief      ���ַ���ת��Ϊuint8_t����
-  * @param[out] word: ת���������
-  * @param[in]  str: ԭʼ�ַ���
+  * @brief      将字符串复制到字节数组。
+  * @param[out] word: 输出字节数组。
+  * @param[in]  str: 输入字符串。
   * @retval     None
   */
 /* 字符串转定长字节数组：最多拷贝 10 字节，不追加结束符；当前无调用者，保留工具函数。 */
@@ -306,17 +306,17 @@ void referee_data_solve(uint8_t *frame)
 
 
 /* CRC8：初值 0xFF、多项式 0x31（反射），输入与输出均按位反转，用于 5 字节帧头校验。 */
-// CRC8У�麯��
-// ��ʼֵ0xFF, ���������, ����ʽ0x31, ����������ݷ�ת
+// CRC8 帧头校验。
+// 初值 0xFF，多项式 0x31，输入和输出按位反转。
 // 参数：data 待校验数据；length 字节数；返回：8 位校验值。
 uint8_t calculate_crc8(const uint8_t *data, uint32_t length)
 {
-    uint8_t crc = 0xFF;  // ��ʼֵ
+    uint8_t crc = 0xFF;  // CRC8 初值。
     
     for (uint32_t i = 0; i < length; i++) {
         uint8_t byte = data[i];
         
-        // �������ݷ�ת
+        // 反转输入字节的位序。
         byte = (byte & 0x55) << 1 | (byte & 0xAA) >> 1;
         byte = (byte & 0x33) << 2 | (byte & 0xCC) >> 2;
         byte = (byte & 0x0F) << 4 | (byte & 0xF0) >> 4;
@@ -325,22 +325,22 @@ uint8_t calculate_crc8(const uint8_t *data, uint32_t length)
         
         for (uint8_t bit = 0; bit < 8; bit++) {
             if (crc & 0x80) {
-                crc = (crc << 1) ^ 0x31;  // ����ʽ0x31
+                crc = (crc << 1) ^ 0x31;  // CRC8 多项式。
             } else {
                 crc = crc << 1;
             }
         }
     }
     
-    // ������ݷ�ת
+    // 反转 CRC 输出位序。
     crc = (crc & 0x55) << 1 | (crc & 0xAA) >> 1;
     crc = (crc & 0x33) << 2 | (crc & 0xCC) >> 2;
     crc = (crc & 0x0F) << 4 | (crc & 0xF0) >> 4;
     
-    return crc;  // ���������
+    return crc;  // 返回 CRC8 校验值。
 }
 
-// �򻯵�CRC8���㣨��������̫���ӣ�
+// 简化版 CRC8：不进行输入和输出位反转。
 // 简化版 CRC8：同一多项式/初值，但省略输入输出位反转；当前无调用者。
 uint8_t calculate_crc8_simple(const uint8_t *data, uint32_t length)
 {
@@ -361,30 +361,30 @@ uint8_t calculate_crc8_simple(const uint8_t *data, uint32_t length)
     return crc;
 }
 
-// CRC16-ModbusУ�麯��
-// ��ʼֵ0xFFFF, ���������, ����ʽ0x8005
+// CRC16-Modbus 校验。
+// 初值 0xFFFF，反射多项式 0xA001（对应 0x8005）。
 /* CRC16-Modbus：初值 0xFFFF、反射多项式 0xA001，用于整帧（含 cmd_id 与载荷）校验。 */
 // 参数：data/length；返回：16 位校验值。
 uint16_t calculate_crc16_modbus(const uint8_t *data, uint32_t length)
 {
-    uint16_t crc = 0xFFFF;  // ��ʼֵ
+    uint16_t crc = 0xFFFF;  // CRC16 初值。
     
     for (uint32_t i = 0; i < length; i++) {
         crc ^= data[i];
         
         for (uint8_t bit = 0; bit < 8; bit++) {
             if (crc & 0x0001) {
-                crc = (crc >> 1) ^ 0xA001;  // 0xA001��0x8005��λ����
+                crc = (crc >> 1) ^ 0xA001;  // 0xA001 是 0x8005 的反射形式。
             } else {
                 crc = crc >> 1;
             }
         }
     }
     
-    return crc;  // ���������
+    return crc;  // 返回 CRC16 校验值。
 }
 
-// ��֤���������ڲ���ʾ�����ݣ�
+// 校验接收到的数据帧。
 /* 帧头 CRC8 校验：末字节为发送端校验值，其余字节参与计算。 */
 bool verify_crc8_check_sum(const uint8_t *data, uint32_t length)
 {
@@ -411,20 +411,20 @@ bool verify_crc16_check_sum(const uint8_t *data, uint32_t length)
 // 调用上下文：referee_usart_Task 每轮解析后调用；返回：无。
 void Custom_RC_data(void)
 {
-	// �����յ����ֽ�����ת��Ϊ������
+	// 将控制器载荷字节拆分并转换为业务字段。
         // 四个 float 通道（data[0..15]）：大端 IEEE-754，每 4 字节一个。
 		Custom_RC[0].DM_CC_receive = bytes_to_float(custom_robot_data.data[0], custom_robot_data.data[1], custom_robot_data.data[2], custom_robot_data.data[3]);
 		Custom_RC[1].DM_CC_receive = bytes_to_float(custom_robot_data.data[4], custom_robot_data.data[5], custom_robot_data.data[6], custom_robot_data.data[7]);
 		Custom_RC[2].DM_CC_receive = bytes_to_float(custom_robot_data.data[8], custom_robot_data.data[9], custom_robot_data.data[10], custom_robot_data.data[11]);
 		Custom_RC[3].DM_CC_receive = bytes_to_float(custom_robot_data.data[12], custom_robot_data.data[13], custom_robot_data.data[14], custom_robot_data.data[15]);
-		// ���ֽ������е�����ת��Ϊ int32_t
+		// 解码两个 int32 通道。
         // 两个 int32 通道（data[16..23]）：大端拼接，用于自定义控制器/大疆量。
 		Custom_RC[4].DJ_CC_receive = (int32_t)(custom_robot_data.data[16] << 24) | 
 																 (custom_robot_data.data[17] << 16) | 
 																 (custom_robot_data.data[18] << 8) | 
 																 custom_robot_data.data[19];
 
-		// ͬ��������һ�� 32 λ���ݴ��ֽ������н���
+		// 解码第二个 int32 通道。
 		Custom_RC[5].DJ_CC_receive = (int32_t)(custom_robot_data.data[20] << 24) | 
 																 (custom_robot_data.data[21] << 16) | 
 																 (custom_robot_data.data[22] << 8) | 
@@ -436,13 +436,13 @@ void Custom_RC_data(void)
 }
 
 
-// �� 4 ���ֽ�ת��Ϊһ�� float ���͵�ֵ
+// 将 4 个字节重组成 float。
 /* 大端 4 字节转 float：先拼 uint32，再用 memcpy 做位型重解释，避免严格别名问题。 */
 float bytes_to_float(uint8_t byte1, uint8_t byte2, uint8_t byte3, uint8_t byte4)
 {
     uint32_t intRep = ((uint32_t)byte1 << 24) | ((uint32_t)byte2 << 16) | ((uint32_t)byte3 << 8) | (uint32_t)byte4;  // 大端序：byte1 为最高字节
     float value;
     // 用 memcpy 做位型重解释，规避严格别名问题（上一行已拼出 uint32 位型）。
-    memcpy(&value, &intRep, sizeof(value));  // �� 32 λ����ת��Ϊ float
+    memcpy(&value, &intRep, sizeof(value));  // 按位重解释为 float，避免别名违规。
     return value;
 }

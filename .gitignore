@@ -48,6 +48,7 @@ Desktop.ini
 # Keil Assistant 扩展在工程子目录留下的旧日志/配置（2025 年的残留）
 MDK-ARM/.vscode/
 .idea/
+.settings/
 *.swp
 *~
 
@@ -61,7 +62,7 @@ _archived_*/
 tools/selftest/build/
 
 # 链接脚本是手写的，不能丢（*.sct 规则会误伤）
-!MDK-ARM/COD_H7_Template/COD_H7_Template.sct
+!MDK-ARM/ATS_H7_Template/ATS_H7_Template.sct
 
 # clangd / 编译数据库（本机生成，不入库）
 .cache/

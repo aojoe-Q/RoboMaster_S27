@@ -202,7 +202,7 @@ static void QuaternionEKF_H_Update(KalmanFilter_Info_TypeDef *KF){
 
 static bool QuaternionEKF_ChiSqrtTest(KalmanFilter_Info_TypeDef *KF){
  
-  // Cache_Matrix[0] = inverse(H·Pminus·HT + R)·(z(k) - h(Xhatminus))
+  // Cache_Matrix[0] = inverse(H路Pminus路HT + R)路(z(k) - h(Xhatminus))
   KF->Mat.Cache_Matrix[0].numRows = KF->Mat.Cache_Matrix[1].numRows;
   KF->Mat.Cache_Matrix[0].numCols = 1;
   KF->MatStatus = Matrix_Multiply(&KF->Mat.Cache_Matrix[1], &KF->Mat.Cache_Vector[1], &KF->Mat.Cache_Matrix[0]);
@@ -212,7 +212,7 @@ static bool QuaternionEKF_ChiSqrtTest(KalmanFilter_Info_TypeDef *KF){
   KF->Mat.Cache_Vector[0].numCols = KF->Mat.Cache_Matrix[1].numRows;
   KF->MatStatus = Matrix_Transpose(&KF->Mat.Cache_Matrix[1], &KF->Mat.Cache_Vector[0]);
 	
-// ChiSquare_Matrix = (z(k) - h(Xhatminus)'·inverse(H·Pminus·HT + R)·(z(k) - h(Xhatminus)) */
+// ChiSquare_Matrix = (z(k) - h(Xhatminus)'路inverse(H路Pminus路HT + R)路(z(k) - h(Xhatminus)) */
   KF->MatStatus = Matrix_Multiply(&KF->Mat.Cache_Vector[0], &KF->Mat.Cache_Matrix[0], &KF->ChiSquareTest.ChiSquare_Matrix);
 	
 	if (KF->ChiSquareTest.ChiSquare_Data[0] < 0.5f * KF->ChiSquareTest.ChiSquareTestThresholds)
@@ -271,12 +271,12 @@ static void QuaternionEKF_xhat_Update(KalmanFilter_Info_TypeDef *KF){
 	  /* HT */
   KF->MatStatus = Matrix_Transpose(&KF->Mat.H,&KF->Mat.HT);
 
-  /* Cache_Matrix[0] = H·Pminus */
+  /* Cache_Matrix[0] = H路Pminus */
   KF->Mat.Cache_Matrix[0].numRows = KF->Mat.H.numRows;
   KF->Mat.Cache_Matrix[0].numCols = KF->Mat.Pminus.numCols;
   KF->MatStatus = Matrix_Multiply(&KF->Mat.H, &KF->Mat.Pminus, &KF->Mat.Cache_Matrix[0]);
 
-  /* Cache_Matrix[1] = H·Pminus·HT */
+  /* Cache_Matrix[1] = H路Pminus路HT */
   KF->Mat.Cache_Matrix[1].numRows = KF->Mat.Cache_Matrix[0].numRows;
   KF->Mat.Cache_Matrix[1].numCols = KF->Mat.HT.numCols;
   KF->MatStatus = Matrix_Multiply(&KF->Mat.Cache_Matrix[0], &KF->Mat.HT, &KF->Mat.Cache_Matrix[1]); 
@@ -286,7 +286,7 @@ static void QuaternionEKF_xhat_Update(KalmanFilter_Info_TypeDef *KF){
   KF->Mat.K_denominator.numCols = KF->Mat.R.numCols;
   KF->MatStatus = Matrix_Add(&KF->Mat.Cache_Matrix[1], &KF->Mat.R, &KF->Mat.K_denominator);
 
-  /* Cache_Matrix[1] = inverse(H·Pminus·HT + R) */
+  /* Cache_Matrix[1] = inverse(H路Pminus路HT + R) */
   KF->MatStatus = Matrix_Inverse(&KF->Mat.K_denominator, &KF->Mat.Cache_Matrix[1]);
 	
   KF->Mat.Cache_Vector[0].numRows = KF->Mat.H.numRows;
@@ -318,12 +318,12 @@ static void QuaternionEKF_xhat_Update(KalmanFilter_Info_TypeDef *KF){
     return;
   }
 
-  /* Cache_Matrix[0] = Pminus·HT */
+  /* Cache_Matrix[0] = Pminus路HT */
   KF->Mat.Cache_Matrix[0].numRows = KF->Mat.Pminus.numRows;
   KF->Mat.Cache_Matrix[0].numCols = KF->Mat.HT.numCols;
   KF->MatStatus = Matrix_Multiply(&KF->Mat.Pminus, &KF->Mat.HT, &KF->Mat.Cache_Matrix[0]);
 
-  /* k = Pminus·HT·inverse(H·Pminus·HT + R) */
+  /* k = Pminus路HT路inverse(H路Pminus路HT + R) */
   KF->MatStatus = Matrix_Multiply(&KF->Mat.Cache_Matrix[0], &KF->Mat.Cache_Matrix[1], &KF->Mat.K);
 	
 	/* The smaller the rk , the greater the gain */
@@ -333,7 +333,7 @@ static void QuaternionEKF_xhat_Update(KalmanFilter_Info_TypeDef *KF){
 	}
 
   /**
-   * @brief K = \frac {P·minus·HT}{H·Pminus·HT + V·R·VT}
+   * @brief K = \frac {P路minus路HT}{H路Pminus路HT + V路R路VT}
    *          = [  0,  1,  2,
    *               3,  4,  5,
    *               6,  7,  8,
@@ -350,7 +350,7 @@ static void QuaternionEKF_xhat_Update(KalmanFilter_Info_TypeDef *KF){
     }
   }
 
-  /* Cache_Vector[0] = K(k)·(z(k) - H·xhat'(k)) */
+  /* Cache_Vector[0] = K(k)路(z(k) - H路xhat'(k)) */
   KF->Mat.Cache_Vector[0].numRows = KF->Mat.K.numRows;
   KF->Mat.Cache_Vector[0].numCols = 1;
   KF->MatStatus = Matrix_Multiply(&KF->Mat.K, &KF->Mat.Cache_Vector[1], &KF->Mat.Cache_Vector[0]);

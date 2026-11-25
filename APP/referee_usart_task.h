@@ -6,11 +6,11 @@
   * @history
   *  Version    Date            Author          Modification
   *  V1.0.0     2023-7-11       Penguin         1. done
-  *  V1.0.1     Oct-31-2023     LihanChen       1. ��ɺ��Ŀ�ܵĹ�����ʹ�������ģʽ�� miniPC ģʽ���ݡ�
-  *  V1.0.2     Nov-01-2023     LihanChen       1. �� Append_CRC16_Check_Sum_SendPacketVision() �� Append_CRC-16_Check_Stum_OutputPCData() �ϲ��� Append_CRC16_Check_Sum() ��
-  *  v2.0.0     Feb-24-2024     LihanChen       1. �ع����룬�� usb_task �ķ��ͺͽ��շ��룬��ʵ�ְַ����ͺͽ����Ӿ��͵�������
-  *  v2.0.1     Mar-02-2024     LihanChen       1. ɾ��δʹ�õ� USB_RECEIVE_STATE ���壬ȥ�����뾯��
-  *  v2.1.0     Mar-04-2024     LihanChen       1. ���Ӳ���ϵͳ��Ϣת���������ӿڣ���������ʵ��ֵ��
+  *  V1.0.1     Oct-31-2023     LihanChen       1. 调整迷你主机模式下的数据处理。
+  *  V1.0.2     Nov-01-2023     LihanChen       1. 合并 CRC16 数据发送校验接口。
+  *  v2.0.0     Feb-24-2024     LihanChen       1. 重构 USB 任务收发流程，拆分视觉与自定义控制器数据处理。
+  *  v2.0.1     Mar-02-2024     LihanChen       1. 删除未使用的 USB_RECEIVE_STATE 定义。
+  *  v2.1.0     Mar-04-2024     LihanChen       1. 增加裁判系统信息转发接口并更新反馈数据。
   @verbatim
   =================================================================================
 
@@ -72,7 +72,7 @@ typedef enum
 #define REF_PROTOCOL_FRAME_MAX_SIZE         128  // 含帧头与 CRC 的整帧上限
 #define NAV_ID 0X0001
 //#define    ROBOT_STATE_CMD_ID               0x0201,
-// Э�鳣������
+// 协议常量定义。
 #define FRAME_HEADER_SIZE 5  // SOF(1) + len(2) + seq(1) + crc8(1)
 #define CMD_ID_SIZE 2
 #define FRAME_TAIL_SIZE 2
@@ -84,24 +84,24 @@ typedef enum
 #define REF_HEADER_CRC_CMDID_LEN            (REF_PROTOCOL_HEADER_SIZE + REF_PROTOCOL_CRC16_SIZE + sizeof(uint16_t))  // 5 + 2 + 2 = 9：数据段解析起点
 #define REF_HEADER_CMDID_LEN                (REF_PROTOCOL_HEADER_SIZE + sizeof(uint16_t))  // 帧头 + cmd_id
 
-// ֡ͷ�ṹ
+// 帧头结构定义。
 // 帧头按 1 字节对齐打包，禁止编译器插入填充，保证与线上字节流一致。
 #pragma pack(push, 1)
 typedef struct {
-    uint8_t sqf;           // ��ʼ�ֽ� 0xA5
-    uint16_t data_length;  // ���ݳ���
-    uint8_t seq;           // �����
-    uint8_t crc8;          // ֡ͷCRC8У��
+    uint8_t sqf;           // 帧起始字节 0xA5。
+    uint16_t data_length;  // 载荷长度，单位字节。
+    uint8_t seq;           // 帧序号。
+    uint8_t crc8;          // 帧头 CRC8。
 } frame_header_t;
 #pragma pack(pop)
 
 // 逻辑帧视图（非线上布局）：描述“帧头 + 命令 + 载荷 + CRC”的组合关系。
-// ����֡�ṹ
+// 协议帧业务字段视图。
 typedef struct {
     frame_header_t header;
-    uint16_t cmd_id;       // ����ID
-    uint8_t *data;         // �����غ�
-    uint16_t crc16;        // ����CRC16У��
+    uint16_t cmd_id;       // 命令 ID。
+    uint8_t *data;         // 载荷指针。
+    uint16_t crc16;        // 帧 CRC16。
 } protocol_frame_t;
 // 0x0201 机器人状态载荷：等级/血量/热量/功率限制，以及云台/底盘/发射机构功率输出许可位。
 #pragma pack(push, 1)
@@ -130,7 +130,7 @@ typedef struct/*0X0302*/
 
 
 // 旧版解析状态枚举；当前解包使用下面的 unpack_step_e，此处保留以兼容历史代码。
-// ����״̬
+// 解析状态。
 typedef enum {
     PARSE_STATE_HEADER,
     PARSE_STATE_CMD_ID,
@@ -148,7 +148,7 @@ typedef struct
 
 } NAV_t;
 // 线上帧头结构（5 字节）：布局与 frame_header_t 一致，供解包状态机复用。
-#pragma pack(push, 1)  // ��ȷ1�ֽڶ��룬��ֹ���
+#pragma pack(push, 1)  // 按 1 字节对齐，匹配线协议布局。
 typedef  struct
 {
   uint8_t SOF;
@@ -156,7 +156,7 @@ typedef  struct
   uint8_t seq;
   uint8_t CRC8;
 } frame_header_struct_t;
-#pragma pack(pop)      // �ָ�Ĭ�϶���
+#pragma pack(pop)      // 恢复默认对齐方式。
 // 解包状态机步进：帧头 -> 长度低/高 -> 序号 -> 帧头 CRC8 -> 数据 + CRC16。
 typedef enum
 {

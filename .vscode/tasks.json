@@ -308,7 +308,7 @@
         "connect_mode=attach",
         "--format",
         "hex",
-        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.hex"
+        "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.hex"
       ],
       "dependsOn": "Keil: Build",
       "problemMatcher": []
@@ -326,7 +326,7 @@
         "connect_mode=attach",
         "--format",
         "hex",
-        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.hex"
+        "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.hex"
       ],
       "problemMatcher": []
     },
@@ -343,7 +343,7 @@
         "connect_mode=attach",
         "--format",
         "elf",
-        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf"
+        "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.axf"
       ],
       "problemMatcher": []
     },
@@ -396,7 +396,7 @@
       "args": [
         "${workspaceFolder}/.vscode/live_watch.py",
         "--elf",
-        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.axf",
         "--rate",
         "20"
       ],
@@ -423,7 +423,7 @@
       "args": [
         "${workspaceFolder}/.vscode/live_watch.py",
         "--elf",
-        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.axf",
         "--rate",
         "50",
         "--csv",
@@ -453,7 +453,7 @@
         "port=SWD",
         "mode=UR",
         "-w",
-        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.hex",
+        "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.hex",
         "-v",
         "-rst"
       ],
@@ -469,7 +469,7 @@
         "port=SWD",
         "mode=UR",
         "-w",
-        "${workspaceFolder}/MDK-ARM/COD_H7_Template/project.axf",
+        "${workspaceFolder}/MDK-ARM/ATS_H7_Template/project.axf",
         "-v",
         "-rst"
       ],

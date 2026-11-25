@@ -7,7 +7,7 @@
 S27_TEST_2/
 ├── CMakeLists.txt                    # 主构建脚本（源文件/头文件/宏/链接选项）
 ├── CMakePresets.json                 # Debug / Release（Ninja）、Linux-Debug / Linux-Release（Make）
-├── STM32H723VGTX_FLASH.ld            # 链接脚本（由 COD_H7_Template.sct 翻译）
+├── STM32H723VGTX_FLASH.ld            # 链接脚本（由 ATS_H7_Template.sct 翻译）
 ├── Core/Startup/startup_stm32h723xx.s# GCC 语法启动文件（比官方模板多了 .axi_data 拷贝）
 └── cmake/
     ├── gcc-arm-none-eabi.cmake       # 工具链文件（自动定位 arm-none-eabi-gcc）

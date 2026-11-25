@@ -6,7 +6,7 @@ firmware keeps running* -- no halt, no reset, no breakpoint.  The probe is
 opened in pyOCD "attach" mode, so the core is never stopped.
 
 Usage (normally started by the VSCode task "Live Watch: ArmData (running)"):
-    python live_watch.py --elf MDK-ARM/COD_H7_Template/project.axf
+    python live_watch.py --elf MDK-ARM/ATS_H7_Template/project.axf
     python live_watch.py --elf ... --rate 50 --csv armdata.csv
     python live_watch.py --elf ... --once          # single snapshot
 
