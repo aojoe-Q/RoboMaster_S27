@@ -125,6 +125,7 @@ ROS 2 侧代码已独立到 `aojoe-Q/ARM_ROS` 仓库，本仓库的 `ROS2.md` �
 | 日期 | 提交 | 改了什么 |
 |---|---|---|
 | 2026-11-25 | `dd045cd` | **散列文件改名 + 注释修复**：Keil 工程模板 `COD_H7_Template` → `ATS_H7_Template`，`project.uvprojx` 的 ScatterFile 同步；修复 10 个源文件里被破坏成 U+FFFD 的中文注释；`DM_motor.h` 量程放宽（KP_MAX 700 / KD_MAX 10）并删掉未引用的第二套宏；`Arm_L_task.c` J3 斜坡 0.0035→0.0015；新增 `.editorconfig`、`.clangd`、工程代码导读。**需 Rebuild**（散列文件路径变了）。
+| 2026-11-26 | `9828b32` | **机械臂调参**：夹爪遥控倍率与斜坡加倍（0.00005→0.00010、0.030→0.060）；J1 限位收紧、J6 限位重定；J2 KP/KD 提到 700/10、J3 KD 3.0→4.0；两套取放位姿的 J6 目标改为 0.0；另补两行注释掉的 1/6 号电机标零调用。**需 Rebuild**，上车先 `allow_enable:=0` 复核 J1/J6 限位。 |
 | 2026-11-25 | `4be73d1` | **清理历史辅助文件**：删除 `APP/INTEGRATION_CN.md`、`commit_p0_p1_p2.bat/.sh`、`final_commit.sh`（P0/P1/P2 阶段的临时提交脚本与集成说明，已被 README/docs 取代），同步修掉 `ROS2.md` 文档索引与 `verify_fixes.py` 的下一步提示里的引用。不影响编译，无需 Rebuild。 |
 | 2026-11-22 | - | **按系统选择默认入口**：统一 Ctrl+Shift+B 和 F5，使用 VS Code 系统覆盖配置在 Linux 上调用 GCC/Make、在 Windows 上调用 Keil；IntelliSense 使用原生 Linux/Win32 自动配置名。保留各工具链的手动入口，本机路径继续由对应系统的配置脚本生成。 |
 | 2026-11-22 | - | **PowerDebugger 访问诊断**：补充 `303a:40ff` 的 USB/HID udev 权限规则和探针检查脚本；F5 在编译、烧录前检查设备节点及用户权限，区分未连接、节点不可见、权限不足和 pyOCD 未识别。规则需在本机安装后拔插 USB 生效。 |
