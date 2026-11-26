@@ -26,8 +26,8 @@
 
 /* 关节位置硬限位（rad，电机侧读数）：limitPosition() 用它把目标钳在机械可达范围内，
  */
-#define J1_Max_position 2.81695309f
-#define J1_Min_position -2.96054893f
+#define J1_Max_position 2.25446674f
+#define J1_Min_position -2.23882553f
 #define J2_Max_position 0.0f
 #define J2_Min_position -2.05669899f
 #define J3_Max_position 0.0f
@@ -36,8 +36,8 @@
 #define J4_Min_position 0.0f
 #define J5_Max_position 1.40938965f
 #define J5_Min_position -0.904316101f
-#define J6_Max_position 2.32408657f
-#define J6_Min_position -0.650879326f
+#define J6_Max_position 0.989656677f
+#define J6_Min_position -2.15582775f
 #define Grip_Max_position 0.0f
 #define Grip_Min_position -12.0f		 // 夹爪量程下限：负方向为闭合，数值取得很大，只作兜底
 
@@ -48,10 +48,10 @@
  */
 #define J1_PID_KP 68.0f		//J1 KP
 #define J1_PID_KD 4.0f		//J1 KD
-#define J2_PID_KP 550.0f	//J2 KP
-#define J2_PID_KD 6.5f		//J2 KD
+#define J2_PID_KP 700.0f	//J2 KP
+#define J2_PID_KD 10.0f		//J2 KD
 #define J3_PID_KP 165.0f	//J3 KP 200
-#define J3_PID_KD 3.0f		//J3 KD
+#define J3_PID_KD 4.0f		//J3 KD
 #define J4_PID_KP 32.0f		//J4 KP
 #define J4_PID_KD 0.5f		//J4 KD
 #define J5_PID_KP 40.0f		//J5 KP
@@ -86,7 +86,7 @@
 #define J3_POSE_position -0.309948921f
 #define J4_POSE_position -0.0f
 #define J5_POSE_position 0.0783929825f
-#define J6_POSE_position  2.22877121f
+#define J6_POSE_position  0.0f
 #define Grip_POSE_position_1 -1.0f
 //TAKE POSE_2
 #define J1_POSE_position_2 0.0f
@@ -94,7 +94,7 @@
 #define J3_POSE_position_2 -1.15300941f
 #define J4_POSE_position_2 -0.0f
 #define J5_POSE_position_2 0.104715347f
-#define J6_POSE_position_2  2.22877121f
+#define J6_POSE_position_2  0.0f
 #define Grip_POSE_position_2 -6.0f
 //RESET ARM
 /* 复位（ARM_RESET）模式的目标位姿：把机械臂收到收纳姿态，夹爪保持约夹紧位。 */

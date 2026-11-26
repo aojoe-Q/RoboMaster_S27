@@ -564,6 +564,9 @@ void Arm_L_Init(void)
 
     /* ================= 阶段 3：保存零点并收集反馈 ================= */
 //	Arm_SaveMotorZero();
+//	save_motor_zero(&hfdcan1, 1, 0U);
+//	save_motor_zero(&hfdcan1, 6, 0U);
+
 
     /* 等待 7 个电机反馈到达（最多 1.5s），超时则失败返回 */
     if (!Arm_WaitMotorFeedback(1500U)) {
@@ -1302,7 +1305,7 @@ void ARM_rc(void)
 	ArmData.J6.Kp = J6_PID_KP;ArmData.J6.Kd = J6_PID_KD;
 	ArmData.Grip.Kp = Grip_PID_KP;ArmData.Grip.Kd = Grip_PID_KD;	
 /* 夹爪斜坡步长 0.030 rad/拍：本模式只有夹爪限速，其余轴直接跟手。 */
-	Grip_ramp = 0.030;							/* 本模式原来完全不设夹爪斜坡 */
+	Grip_ramp = 0.060;							/* 本模式原来完全不设夹爪斜坡 */
 
     ArmData.J1.RC_Sum_Value += channel_0*0.00001; // 每拍角度增量 = 通道值 × 系数；ch0 同时驱动 J1/J3，ch1 同时驱动 J2/J4，ch2 驱动 J5/J6
 	ArmData.J2.RC_Sum_Value += channel_1*0.00001;
@@ -1310,7 +1313,7 @@ void ARM_rc(void)
 	ArmData.J4.RC_Sum_Value += channel_1*0.00002; // J4 的累加系数是 J2 的两倍
 	ArmData.J5.RC_Sum_Value += channel_2*0.00002;
 	ArmData.J6.RC_Sum_Value += channel_2*0.00002;
-	ArmData.Grip.RC_Sum_Value += channel_3*0.00005;
+	ArmData.Grip.RC_Sum_Value += channel_3*0.00010;
 	/* 与最终目标使用同一模式入口基准，防止负位置切入后无法张开。 */
 	limitPosition(&ArmData.Grip.RC_Sum_Value,
 	              Grip_Max_position - ArmData.Grip.Initial_Total_position - ArmData.Grip.Key_Control_Value,
